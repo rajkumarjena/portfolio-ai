@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Bond Entry Form</title>
+    <link rel="stylesheet" href="bonds/bond-style.css">
+</head>
+<body>
+<h2>Bond Details Entry</h2>
+<div class="form-container">
+    <!-- LEFT SIDE: Data Inputs -->
+    <div class="form-left">
+        <form id="bondForm">
+            <div>
+                <label>Investment Type</label>
+                <select name="investmentType" required>
+                    <option value="bond">BOND</option>
+                    <option value="fd">FD</option>
+                    <option value="share">SHARE</option>
+                    <option value="equity-mutual-fund">EQUITY MUTUAL FUND-</option>
+                    <option value="debt-mutual-fund">DEBT MUTUAL FUND</option>
+                    <option value="smallcase">SMALLCASE</option>
+                </select>
+            </div>
+            <div><label>Parameter Name</label><input type="text" name="paramName" required></div>
+            <div><label>Parameter Value</label><input type="text" name="paramValue" required></div>
+            <div>
+                <label>Note</label>
+                <textarea name="note" rows="4" cols="50"></textarea>
+            </div>
+            <button type="submit">Save Param</button>
+        </form>
+    </div>
+</div>
+
+<div class="nav-buttons">
+    <button type="button" onclick="navigateAway('/index.html')">🏠 Home</button>
+</div>
+<script src="app-param-config-script.js"></script>
+</body>

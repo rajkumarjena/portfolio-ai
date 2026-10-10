@@ -1,0 +1,168 @@
+<style>
+	body { font-family: Arial, sans-serif; margin: 20px; background-color: #f9f9f9; color: #333; }
+	h2 { margin-bottom: 20px; }
+	
+	.form-container {
+		display: flex;
+		
+		/* 1. FIXED CONTENT ALIGNMENT */
+		align-items: flex-start;  /* 🔑 Crucial: Prevents boxes from stretching vertically to match each other's height */
+		
+		/* 2. FIXED HORIZONTAL GAP */
+		justify-content: flex-start; /* 🔑 Packs the items close together starting from the left side */
+		gap: 2px;                   /* 📐 Adjust this pixel number to set the exact spacing between the two panels */
+		
+		padding: 2px;
+		width: 100%;
+		box-sizing: border-box;
+	}
+
+	.form-left {
+		flex: 1; /* Automatically takes up its proportional share without bloating */
+		background: #fff;
+		padding: 2px; /* Internal content breathing room */
+		border-radius: 8px;
+		box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+	}
+
+	.form-right {
+		width: 750px; /* Give it a specific fixed width so your new table has enough horizontal space */
+		position: sticky;
+		top: 20px;
+	}
+
+
+
+	.calculation-card {
+		background: #eef2f7;
+		border-left: 5px solid #0056b3;
+		padding: 20px;
+		border-radius: 8px;
+		box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+	}
+
+	.calculation-card h3 {
+		margin-top: 0;
+		color: #0056b3;
+		font-size: 16px;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+	}
+
+	.total-display-group {
+		margin-top: 15px;
+	}
+
+	.total-display-group label {
+		display: block;
+		font-weight: bold;
+		margin-bottom: 5px;
+		color: #555;
+	}
+
+	form div { margin-bottom: 12px; }
+	label { display: inline-block; width: 200px; font-weight: 500; vertical-align: middle; }
+	input, select, textarea { width: 250px; padding: 6px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; vertical-align: middle; }
+	textarea { height: 60px; resize: vertical; }
+
+	button[type="submit"] { margin-top: 15px; padding: 10px 20px; background: #0056b3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+	button[type="submit"]:hover { background: #004494; }
+
+	.nav-buttons { margin-top: 25px; border-top: 1px solid #ddd; padding-top: 15px; }
+	.nav-buttons button { margin-right: 10px; padding: 8px 14px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; }
+	.nav-buttons button:hover { background: #e0e0e0; }
+	
+	/* 1. Core Table Box Container */
+    .table-container {
+        width: 100%;
+        margin-top: 20px;
+        background: #ffffff;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
+        border: 1px solid #d1d9e0;
+        overflow: hidden;
+        font-family: Arial, sans-serif;
+    }
+
+    .table-container h2 {
+        font-size: 16px;
+        color: #1e293b;
+        padding: 16px 20px;
+        margin: 0;
+        font-weight: 600;
+        background: #fafafa;
+        border-bottom: 1px solid #e2e8f0;
+    }
+
+    /* 2. Grid Structure Mapping */
+    .table-container table {
+        width: 100%;
+        border-collapse: collapse; /* Merges adjacent borders into crisp, clear single lines */
+        font-size: 13px;
+        color: #334155;
+    }
+
+    /* 3. Centered, Multi-Row Header Strategy */
+    .table-container th {
+        background-color: #f8fafc;
+        color: #0f172a;
+        font-weight: 600;
+        padding: 12px 6px;
+        text-align: center;       /* 🔑 Centers header text horizontally */
+        vertical-align: middle;   /* 🔑 Centers header text vertically */
+        border: 1px solid #cbd5e1; /* 🧱 Explicit column and row borders */
+        line-height: 1.4;
+        white-space: normal;      /* 🔑 Forces long header text to wrap onto a second line */
+        word-wrap: break-word;
+    }
+
+    /* Target specific header column sizing boundaries to enforce uniform wrapping */
+    .table-container th:nth-child(1) { width: 60px; }  /* Year */
+    .table-container th:nth-child(2) { width: 95px; }  /* Payment Schedule (wraps into 2 lines) */
+    .table-container th:nth-child(3) { width: 95px; }  /* Payment Date */
+    .table-container th:nth-child(4) { width: 85px; }  /* Interest Payout */
+    .table-container th:nth-child(5) { width: 95px; }  /* Redemption Amount (wraps into 2 lines) */
+    .table-container th:nth-child(6) { width: 95px; }  /* Redemption Value % (wraps into 2 lines) */
+    .table-container th:nth-child(7) { width: 75px; }  /* Action */
+
+    /* 4. Left-Aligned Data Cells */
+    .table-container td {
+        padding: 10px 12px;
+        text-align: left;          /* 🔑 Forces all row data text alignment left */
+        vertical-align: middle;
+        border: 1px solid #cbd5e1; /* 🧱 Clear separation grids for all columns */
+    }
+
+    /* Zebra striping for rapid visual row tracking */
+    .table-container tbody tr:nth-child(even) {
+        background-color: #f8fafc;
+    }
+
+    /* Dynamic line highlighting on cursor hover */
+    .table-container tbody tr:hover {
+        background-color: #f1f5f9;
+    }
+
+    /* 5. Compact Action Button View */
+    .table-container .edit-btn {
+        display: block;
+        width: 100%;
+        padding: 5px 0;
+        background-color: #ffffff;
+        color: #0284c7;
+        border: 1px solid #bae6fd;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 600;
+        text-align: center;
+        transition: all 0.15s ease-in-out;
+    }
+
+    .table-container .edit-btn:hover {
+        background-color: #0284c7;
+        color: #ffffff;
+        border-color: #0284c7;
+        box-shadow: 0 2px 4px rgba(2, 132, 199, 0.2);
+    }
+</style>

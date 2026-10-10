@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Bond Records</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { text-align: center; }
+        h2 { margin-top: 30px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        tr:nth-child(odd) { background-color: #ffffff; }
+        button { margin: 0 5px; }
+        .pagination { margin-top: 15px; text-align: center; }
+        .pagination button { margin: 0 5px; }
+        .nav-buttons { margin-bottom: 20px; }
+        .nav-buttons button { margin-right: 10px; }
+    </style>
+</head>
+<body>
+<h1>Bond Records</h1>
+
+<div class="nav-buttons">
+    <button onclick="window.location.href='/index.html'">🏠 Home</button>
+    <button onclick="window.location.href='/bonds/bond-form.html'">➕ Add Bond</button>
+</div>
+
+<h2>Active Bonds</h2>
+<table id="activeBonds">
+    <thead>
+    <tr>
+        <th>Name</th><th>Issuer</th><th>Investment Date</th><th>Maturity Date</th><th>Actions</th>
+    </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+<div class="pagination" id="activePagination"></div>
+
+<h2>Expired / Matured Bonds</h2>
+<table id="expiredBonds">
+    <thead>
+    <tr>
+        <th>Name</th><th>Issuer</th><th>Investment Date</th><th>Maturity Date</th><th>Actions</th>
+    </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+<div class="pagination" id="expiredPagination"></div>
+<script src="bond-view-script.js"></script>
+</body>
+</html>

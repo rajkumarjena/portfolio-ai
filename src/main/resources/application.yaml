@@ -1,0 +1,31 @@
+spring:
+  application:
+    name: portfolio
+  datasource:
+    url: jdbc:sqlite:bonds.db
+    driver-class-name: org.sqlite.JDBC
+  jpa:
+    database-platform: com.artech.portfolio.common.SQLiteDialect
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    # FIX: Add properties block to suppress explicit DDL constraint generation
+    properties:
+      hibernate:
+        hbm2ddl:
+          extra_physical_table_types: TABLE
+    generate-ddl: true
+
+# Centralized date configuration
+bond:
+  dateFormat:
+    monthlyInput: yyyy-MM
+    dateInput: yyyy-MM-dd
+pf:
+  dateFormat:
+    monthlyInput: yyyy-MM
+    dateInput: yyyy-MM-dd
+app:
+  config:
+    refreshRateDuration: PT24H
+
