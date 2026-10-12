@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Client View</title>
+    <link rel="stylesheet" href="bonds/bond-style.css">
+    <style>
+        body { background: #f4f7fb url('/assets/fd-background.svg') no-repeat center center fixed; background-size: cover; }
+        .search-box { margin: 15px 0; }
+        .search-box input { width: 320px; }
+        .client-table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 6px rgba(0,0,0,0.08); font-size: 13px; }
+        .client-table th { background-color: #0056b3; color: #fff; padding: 10px 8px; text-align: center; border: 1px solid #004494; }
+        .client-table td { padding: 9px 8px; text-align: left; border: 1px solid #cbd5e1; vertical-align: top; }
+        .client-table tbody tr:nth-child(even) { background-color: #f8fafc; }
+        .chip { display: inline-block; background: #eef2f7; border: 1px solid #cbd5e1; border-radius: 12px; padding: 2px 10px; margin: 0 4px 4px 0; font-size: 12px; }
+        .immutable { color: #666; font-size: 12px; font-style: italic; margin-left: 6px; }
+        .details-row td { background: #f1f5f9; }
+        .add-panel { display: flex; flex-wrap: wrap; gap: 18px; }
+        .add-panel .add-group { background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px 14px; }
+        .add-panel h4 { margin: 0 0 8px; font-size: 13px; color: #0056b3; }
+        .add-panel input, .add-panel textarea { display: block; width: 240px; margin-bottom: 6px; }
+        .add-panel textarea { height: 40px; }
+        .add-panel button { padding: 6px 14px; background: #0056b3; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+        .add-panel button:hover { background: #004494; }
+        .note { background: #fff3cd; border-left: 5px solid #ffc107; padding: 10px 16px; border-radius: 6px; margin-bottom: 14px; font-weight: 600; }
+    </style>
+</head>
+<body>
+<h2>Client View</h2>
+
+<div class="nav-buttons">
+    <button onclick="window.location.href='/index.html'">🏠 Home</button>
+    <button onclick="window.location.href='/app-client-config.html'">➕ Add Client</button>
+</div>
+
+<div class="note">Clients are identified by PAN. Name and PAN are permanent &mdash; clients can be updated
+    (add mobiles / emails / bank accounts) but never deleted.</div>
+
+<div class="search-box">
+    <label>Search</label>
+    <input type="text" id="searchInput" placeholder="Filter by name, PAN or bank..." oninput="applySearch()">
+</div>
+
+<table class="client-table" id="clientTable">
+    <thead>
+    <tr>
+        <th>Name</th>
+        <th>PAN</th>
+        <th>Mobile Numbers</th>
+        <th>Email Addresses</th>
+        <th>Bank Accounts</th>
+        <th>Actions</th>
+    </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<script src="app-client-view-script.js"></script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#eef4fb"/>
+      <stop offset="100%" stop-color="#dce8f6"/>
+    </linearGradient>
+    <pattern id="watermark" width="430" height="270" patternUnits="userSpaceOnUse" patternTransform="rotate(-10)">
+      <text x="20" y="120" font-family="Arial, Helvetica, sans-serif" font-size="40" font-weight="bold" fill="#2c5f9e" opacity="0.07">FIXED DEPOSIT</text>
+      <text x="24" y="165" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#2c5f9e" opacity="0.05">Secure &#183; Guaranteed Returns</text>
+    </pattern>
+  </defs>
+  <rect width="1200" height="800" fill="url(#bg)"/>
+  <rect width="1200" height="800" fill="url(#watermark)"/>
+  <circle cx="1050" cy="130" r="70" fill="none" stroke="#2c5f9e" stroke-width="6" opacity="0.08"/>
+  <text x="1050" y="152" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="60" fill="#2c5f9e" opacity="0.08">%</text>
+  <circle cx="150" cy="670" r="85" fill="none" stroke="#2c5f9e" stroke-width="6" opacity="0.07"/>
+  <text x="150" y="698" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="70" fill="#2c5f9e" opacity="0.07">&#8377;</text>
+</svg>

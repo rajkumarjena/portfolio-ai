@@ -1,0 +1,4 @@
+A. Client Configuration Business process
+1. Create a client configuration form as app-client-config.html which will have attribute like Name, Mobile Number, Email, PAN, Bank Name, Bank account number, IFSC, Bank address.
+2. The logic to be build for client configuration is, A client will be identified by his PAN number where as a client can have more than one mobile number, email address, bank account numbers.
+3. Build client view page as app-client-view.html where The client configuration will never be allowed the delete option, but client can add new email address, new bank details whereas he can't update PAN or Name.

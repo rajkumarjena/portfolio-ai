@@ -1,8 +1,10 @@
+server:
+  port: 8080
 spring:
   application:
     name: portfolio
   datasource:
-    url: jdbc:sqlite:bonds.db
+    url: jdbc:sqlite:${user.home}/portfolio.db
     driver-class-name: org.sqlite.JDBC
   jpa:
     database-platform: com.artech.portfolio.common.SQLiteDialect

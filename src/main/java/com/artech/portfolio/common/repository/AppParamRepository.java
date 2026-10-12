@@ -7,4 +7,6 @@ import java.util.List;
 
 public interface AppParamRepository extends JpaRepository<AppParamConfig, Long> {
     List<AppParamConfig> findAll();
+
+    List<AppParamConfig> findByInvestmentTypeAndParamName(String investmentType, String paramName);
 }

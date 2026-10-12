@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Fixed Deposit Records</title>
+    <link rel="stylesheet" href="fd-style.css">
+</head>
+<body>
+<h2>Fixed Deposit Records</h2>
+
+<div class="nav-buttons">
+    <button onclick="window.location.href='/index.html'">🏠 Home</button>
+    <button onclick="window.location.href='/fds/fd-form.html'">➕ Add Fixed Deposit</button>
+</div>
+
+<!-- Filter controls: one filter per field -->
+<div class="filter-section">
+    <label>Bank</label>
+    <select id="filterBank"><option value="">All</option></select>
+
+    <label>Status</label>
+    <select id="filterStatus">
+        <option value="">All</option>
+        <option value="ACTIVE">Active</option>
+        <option value="CLOSED">Closed</option>
+    </select>
+
+    <label>Tenure</label>
+    <select id="filterTenure">
+        <option value="">All</option>
+        <option value="6">6 Months</option>
+        <option value="12">1 Year</option>
+        <option value="24">2 Years</option>
+        <option value="36">3 Years</option>
+        <option value="60">5 Years</option>
+        <option value="120">10 Years</option>
+    </select>
+
+    <p style="margin:10px 0 4px;">
+        <label>Deposit From</label><input type="date" id="filterDepositFrom">
+        <label>Deposit To</label><input type="date" id="filterDepositTo">
+        <label>Maturity From</label><input type="date" id="filterMaturityFrom">
+        <label>Maturity To</label><input type="date" id="filterMaturityTo">
+    </p>
+    <p style="margin:4px 0 10px;">
+        <label>Amount Min</label><input type="number" id="filterAmountMin" min="0" step="0.01">
+        <label>Amount Max</label><input type="number" id="filterAmountMax" min="0" step="0.01">
+        <label>Interest % Min</label><input type="number" id="filterInterestMin" min="0" step="0.01">
+        <label>Interest % Max</label><input type="number" id="filterInterestMax" min="0" step="0.01">
+    </p>
+
+    <button onclick="applyFilter()">Apply Filter</button>
+    <button class="secondary" onclick="resetFilter()">Reset</button>
+</div>
+
+<div class="summary-bar" id="summary"></div>
+
+<table class="fd-table" id="fdTable">
+    <thead>
+    <tr>
+        <th>ID</th>
+        <th>Bank</th>
+        <th>Deposit Amount</th>
+        <th>Tenure</th>
+        <th>Deposit Date</th>
+        <th>Maturity Date</th>
+        <th>Interest %</th>
+        <th>Mature Amount</th>
+        <th>Status</th>
+        <th>Actions</th>
+    </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+<div class="pagination" id="pagination"></div>
+
+<script src="fd-view-script.js"></script>
+</body>
+</html>
