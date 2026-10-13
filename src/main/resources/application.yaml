@@ -1,11 +1,19 @@
 server:
-  port: 8080
+  port: 8081
 spring:
   application:
     name: portfolio
   datasource:
     url: jdbc:sqlite:${user.home}/portfolio.db
     driver-class-name: org.sqlite.JDBC
+  mail:
+    host: ${SPRING_MAIL_HOST}
+    port: ${SPRING_MAIL_PORT:587}
+    username: ${SPRING_MAIL_USERNAME}
+    password: ${SPRING_MAIL_PASSWORD}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
   jpa:
     database-platform: com.artech.portfolio.common.SQLiteDialect
     hibernate:
@@ -30,4 +38,12 @@ pf:
 app:
   config:
     refreshRateDuration: PT24H
+  # Base URL used in password-reset emails (AUTH.md h)
+  base-url: http://localhost:8081
+  mail:
+    from: noreply@portfolio.local
+
+# SMTP settings for password-reset emails (AUTH.md h).
+# Override via environment (SPRING_MAIL_HOST / SPRING_MAIL_USERNAME / ...).
+# When no host is configured the reset link is logged instead of sent.
 

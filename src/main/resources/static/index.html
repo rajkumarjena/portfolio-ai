@@ -11,10 +11,23 @@
         .links { margin-left: 20px; }
         .links a { display: block; margin: 5px 0; text-decoration: none; color: #0066cc; }
         .links a:hover { text-decoration: underline; }
+        .top-bar { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-bottom: 10px; }
+        #whoAmI { font-size: 14px; color: #555; }
+        .top-bar button { padding: 7px 14px; background: #0056b3; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+        .top-bar button:hover { background: #004494; }
+        .top-bar button.secondary { background: #6c757d; }
+        .top-bar button.secondary:hover { background: #565e64; }
+        #adminBtn { display: none; }
     </style>
 </head>
 <body>
 <h1>Portfolio Dashboard</h1>
+
+<div class="top-bar">
+    <span id="whoAmI"></span>
+    <button id="adminBtn" onclick="window.location.href='/admin-users.html'">🛡️ Manage Users</button>
+    <button class="secondary" onclick="logout()">🚪 Logout</button>
+</div>
 
 <div class="investment-section">
     <h2>Bonds</h2>
@@ -72,5 +85,34 @@
         <a href="/app-client-view.html">👥 View Clients</a>
     </div>
 </div>
+
+<script src="/js/csrf.js"></script>
+<script>
+    // Show who is signed in and reveal the admin screen only for ADMIN (AUTH.md e)
+    (async function () {
+        try {
+            const res = await fetch('/api/auth/me');
+            if (res.ok) {
+                const me = await res.json();
+                document.getElementById('whoAmI').textContent = me.name
+                    ? me.name + ' (' + me.role + ')' : me.pan + ' (' + me.role + ')';
+                if (me.role === 'ADMIN') {
+                    document.getElementById('adminBtn').style.display = 'inline-block';
+                }
+            }
+        } catch (e) {
+            console.error('Session lookup failed', e);
+        }
+    })();
+
+    async function logout() {
+        try {
+            await fetch('/logout', { method: 'POST' });
+        } finally {
+            window.invalidateCsrfToken && window.invalidateCsrfToken();
+            window.location.href = '/login.html?logout=1';
+        }
+    }
+</script>
 </body>
 </html>

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Portfolio - Sign in</title>
+    <link rel="stylesheet" href="bonds/bond-style.css">
+    <style>
+        body { background: #f4f7fb url('/assets/fd-background.svg') no-repeat center center fixed; background-size: cover; }
+        .login-wrap { max-width: 440px; margin: 60px auto; }
+        .login-card { background: #fff; padding: 28px 32px; border-radius: 8px; box-shadow: 0 4px 14px rgba(0,0,0,0.12); }
+        .login-card h2 { margin-top: 0; color: #0056b3; }
+        .login-card label { display: block; font-weight: 600; margin-top: 14px; }
+        .login-card input { width: 100%; padding: 9px; margin-top: 5px; box-sizing: border-box;
+                            border: 1px solid #ccc; border-radius: 4px; font-size: 15px; }
+        .login-card button { width: 100%; margin-top: 22px; padding: 11px; background: #0056b3;
+                             color: #fff; border: none; border-radius: 4px; font-size: 15px; cursor: pointer; }
+        .login-card button:hover { background: #004494; }
+        .auth-links { margin-top: 18px; text-align: center; font-size: 14px; }
+        .auth-links a { margin: 0 8px; color: #0066cc; }
+        .banner { padding: 10px 14px; border-radius: 6px; margin-bottom: 14px; font-weight: 600; font-size: 14px; display: none; }
+        .banner.error   { background: #f8d7da; border-left: 5px solid #dc3545; color: #842029; }
+        .banner.info    { background: #d1e7dd; border-left: 5px solid #198754; color: #0f5132; }
+        .banner.warn    { background: #fff3cd; border-left: 5px solid #ffc107; color: #664d03; }
+    </style>
+</head>
+<body>
+<div class="login-wrap">
+    <div class="login-card">
+        <h2>Portfolio Sign in</h2>
+
+        <div id="banner" class="banner"></div>
+
+        <form id="loginForm" action="/login" method="post">
+            <input type="hidden" name="_csrf" id="csrfField">
+            <input type="hidden" name="next" id="nextField" value="/index.html">
+
+            <label for="username">PAN Number</label>
+            <input type="text" id="username" name="username" maxlength="10" autocomplete="username"
+                   placeholder="ABCDE1234F" pattern="[A-Za-z]{5}[0-9]{4}[A-Za-z]"
+                   title="PAN format: 5 letters, 4 digits, 1 letter (e.g. ABCDE1234F)" required autofocus>
+
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" autocomplete="current-password" required>
+
+            <button type="submit">Sign in</button>
+        </form>
+
+        <div class="auth-links">
+            Not registered yet? <a href="/register.html">Create an account</a><br>
+            <a href="/forgot-password.html">Forgot password?</a>
+        </div>
+    </div>
+</div>
+
+<script src="/js/csrf.js"></script>
+<script src="/login-script.js"></script>
+</body>
+</html>

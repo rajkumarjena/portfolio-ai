@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Portfolio - Register</title>
+    <link rel="stylesheet" href="bonds/bond-style.css">
+    <style>
+        body { background: #f4f7fb url('/assets/fd-background.svg') no-repeat center center fixed; background-size: cover; }
+        .reg-wrap { max-width: 480px; margin: 40px auto; }
+        .reg-card { background: #fff; padding: 28px 32px; border-radius: 8px; box-shadow: 0 4px 14px rgba(0,0,0,0.12); }
+        .reg-card h2 { margin-top: 0; color: #0056b3; }
+        .reg-card label { display: block; font-weight: 600; margin-top: 13px; }
+        .reg-card input { width: 100%; padding: 9px; margin-top: 5px; box-sizing: border-box;
+                          border: 1px solid #ccc; border-radius: 4px; font-size: 15px; }
+        .reg-card .hint { font-size: 12px; color: #666; margin-top: 3px; }
+        .reg-card button { width: 100%; margin-top: 22px; padding: 11px; background: #0056b3;
+                           color: #fff; border: none; border-radius: 4px; font-size: 15px; cursor: pointer; }
+        .reg-card button:hover { background: #004494; }
+        .auth-links { margin-top: 18px; text-align: center; font-size: 14px; }
+        .auth-links a { color: #0066cc; }
+        .form-error { background: #f8d7da; border-left: 5px solid #dc3545; color: #842029;
+                      padding: 10px 14px; border-radius: 6px; margin-bottom: 12px;
+                      font-weight: 600; font-size: 14px; display: none; }
+    </style>
+</head>
+<body>
+<div class="reg-wrap">
+    <div class="reg-card">
+        <h2>Create your account</h2>
+        <div class="note" style="background:#fff3cd;border-left:5px solid #ffc107;padding:10px 14px;border-radius:6px;margin-bottom:14px;font-size:13px;">
+            Your PAN is your identity in this application. New accounts start with the <strong>USER</strong> role.
+        </div>
+
+        <div id="formError" class="form-error"></div>
+
+        <form id="registerForm">
+            <label for="name">Full Name</label>
+            <input type="text" id="name" name="name" required>
+
+            <label for="pan">PAN Number</label>
+            <input type="text" id="pan" name="pan" maxlength="10" required
+                   pattern="[A-Za-z]{5}[0-9]{4}[A-Za-z]"
+                   title="PAN format: 5 letters, 4 digits, 1 letter (e.g. ABCDE1234F)"
+                   placeholder="ABCDE1234F">
+
+            <label for="email">Email Address</label>
+            <input type="email" id="email" name="email" required>
+            <div class="hint">Used for password reset links.</div>
+
+            <label for="mobileNumber">Mobile Number (optional)</label>
+            <input type="tel" id="mobileNumber" name="mobileNumber" maxlength="10"
+                   pattern="[0-9]{10}" title="10-digit mobile number">
+
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required
+                   minlength="8" autocomplete="new-password">
+            <div class="hint">At least 8 characters, with letters and digits.</div>
+
+            <label for="confirmPassword">Confirm Password</label>
+            <input type="password" id="confirmPassword" name="confirmPassword" required
+                   autocomplete="new-password">
+
+            <button type="submit">Register</button>
+        </form>
+
+        <div class="auth-links">
+            Already registered? <a href="/login.html">Sign in</a>
+        </div>
+    </div>
+</div>
+
+<script src="/js/csrf.js"></script>
+<script src="/register-script.js"></script>
+</body>
+</html>
