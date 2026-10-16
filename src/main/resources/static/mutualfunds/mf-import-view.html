@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Validate and Sync Mutual Fund</title>
+    <link rel="stylesheet" href="mf-style.css">
+</head>
+<body>
+<h2>Validate & Sync Mutual Fund (Reconciliation Report)</h2>
+<p class="muted">Review the imported CAS statement row by row. Nothing is written to
+    your portfolio until you press <b>Accept</b> (MF.md 16).</p>
+
+<div class="nav-buttons" style="margin-top:0;">
+    <button onclick="window.location.href='/index.html'">🏠 Home</button>
+    <button onclick="window.location.href='/mutualfunds/mf-import.html'">⬆ New Import</button>
+    <button onclick="window.location.href='/mutualfunds/mf-portfolio.html'">📊 MF Portfolio</button>
+    <select id="batchSelect" style="width:320px; vertical-align:middle;" title="Choose an import batch"></select>
+    <button class="primary" onclick="revalidate()">🔄 Re-validate</button>
+    <button class="good" id="acceptBtn" onclick="acceptBatch()">✅ Accept into Portfolio</button>
+    <button class="danger" id="discardBtn" onclick="discardBatch()">🗑 Discard</button>
+</div>
+
+<!-- overall reconciliation status (MF.md 15) -->
+<div id="statusBanner" class="status-banner banner-PENDING">Loading batch...</div>
+
+<!-- detail report before / report / after (MF.md 23, 25) -->
+<div id="detailCards" class="cards"></div>
+
+<!-- validation checks (MF.md 15) -->
+<div class="filter-section" style="display:block;">
+    <h3 style="margin-bottom:8px;">Validation Checks (header & detail level)</h3>
+    <table class="mf-table check-table" id="checkTable">
+        <thead>
+        <tr><th>Check</th><th>Result</th><th>Expected</th><th>Actual</th><th>Note</th></tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
+
+<!-- row filters: mismatches / new schemes (MF.md 20) -->
+<div class="filter-section">
+    <label>Show</label>
+    <select id="statusFilter">
+        <option value="">All rows</option>
+        <option value="NEW">New (green)</option>
+        <option value="EXISTS">Already in system (grey)</option>
+        <option value="NEW_SCHEME">Unregistered scheme (orange)</option>
+        <option value="MAPPED">Remapped by me (blue)</option>
+        <option value="ERROR">Unreadable (red)</option>
+    </select>
+    <label>Kind</label>
+    <select id="typeFilter">
+        <option value="">All</option>
+        <option value="HOLDING">Holdings (header)</option>
+        <option value="TRANSACTION">Transactions (detail)</option>
+    </select>
+    <label>Search</label>
+    <input type="search" id="lineSearch" placeholder="scheme / AMC / folio / description">
+    <span id="rowCounts" class="muted"></span>
+</div>
+
+<table class="mf-table" id="lineTable">
+    <thead>
+    <tr>
+        <th>#</th><th>Kind</th><th class="left">Scheme</th><th>AMC</th><th>Folio</th>
+        <th>Date</th><th class="left">Description</th>
+        <th>Units</th><th>NAV</th><th>Amount (₹)</th><th>Invested (₹)</th><th>Current (₹)</th>
+        <th>Status</th><th class="left">Note / Action</th>
+    </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+<div id="emptyNote" class="muted" style="display:none; padding:12px;">
+    No rows match this filter.
+</div>
+
+<!-- remap dialog (MF.md 20) -->
+<div class="modal-overlay" id="remapModal">
+    <div class="modal">
+        <button class="close-x" onclick="closeRemap()">×</button>
+        <h3>Remap to a registered scheme</h3>
+        <div id="remapInfo" class="muted"></div>
+        <div class="field" style="margin-top:12px;">
+            <label>Registered scheme</label>
+            <select id="remapScheme" style="width:360px;"></select>
+        </div>
+        <div class="muted">If you do not remap, the scheme printed in the statement is
+            registered when you hit Accept (MF.md 20).</div>
+        <div style="margin-top:14px;">
+            <button class="primary" onclick="confirmRemap()">Apply Remap</button>
+            <button onclick="closeRemap()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<script src="/js/csrf.js"></script>
+<script src="mf-import-view-script.js"></script>
+</body>
+</html>

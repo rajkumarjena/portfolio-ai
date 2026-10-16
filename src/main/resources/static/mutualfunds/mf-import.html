@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Import Mutual Fund from MF Central</title>
+    <link rel="stylesheet" href="mf-style.css">
+</head>
+<body>
+<h2>Import Mutual Fund Statement (MF Central / CAMS)</h2>
+<p class="muted">Upload the CAS report in <b>xlsx</b>, <b>csv</b> or <b>pdf</b> format (MF.md 14).
+    The statement is only parsed into a reconciliation batch - nothing reaches your
+    portfolio until you accept it on the next screen (MF.md 16).</p>
+
+<div class="nav-buttons" style="margin-top:0;">
+    <button onclick="window.location.href='/index.html'">🏠 Home</button>
+    <button onclick="window.location.href='/mutualfunds/mf-import-view.html'">✅ Validate & Sync</button>
+    <button onclick="window.location.href='/mutualfunds/mf-portfolio.html'">📊 MF Portfolio</button>
+</div>
+
+<div class="form-container">
+    <div class="form-left">
+        <h3>Upload CAS statement</h3>
+        <form id="uploadForm">
+            <div>
+                <label>Report file</label>
+                <input type="file" id="fileInput" name="file" accept=".xlsx,.xls,.csv,.pdf" required>
+            </div>
+            <div id="uploadStatus" class="muted"></div>
+            <button type="submit" class="primary" id="uploadBtn">⬆ Upload & Reconcile</button>
+        </form>
+        <div class="muted" style="margin-top:14px;">
+            Supported: MF Central detailed report (xlsx), CAS statement (pdf) and the csv
+            export of the same columns.
+        </div>
+    </div>
+    <div class="form-right">
+        <div class="calculation-card">
+            <h3>What happens next</h3>
+            <ol style="font-size:13px; margin:0 0 0 18px; padding:0;">
+                <li>Rows are parsed and checked against the report totals.</li>
+                <li>You review the reconciliation report - green means totals match.</li>
+                <li>Duplicates are skipped automatically (MF.md 22).</li>
+                <li>New AMCs/schemes can be remapped or registered on accept (MF.md 20).</li>
+                <li>Only <b>Accept</b> writes the rows to your portfolio (MF.md 16).</li>
+            </ol>
+        </div>
+    </div>
+</div>
+
+<h3>Previous imports</h3>
+<table class="mf-table" id="batchTable">
+    <thead>
+    <tr>
+        <th>#</th><th>File</th><th>Type</th><th>Period</th><th>Uploaded</th>
+        <th>Status</th><th>Reconciliation</th><th class="left">Actions</th>
+    </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+<div id="emptyNote" class="muted" style="display:none; padding:12px;">No imports yet.</div>
+
+<script src="/js/csrf.js"></script>
+<script src="mf-import-script.js"></script>
+</body>
+</html>

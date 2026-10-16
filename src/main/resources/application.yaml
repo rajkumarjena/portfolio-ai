@@ -1,8 +1,13 @@
 server:
-  port: 8081
+  port: 8080
 spring:
   application:
     name: portfolio
+  # CAS statements (xlsx/pdf) can be large - raise the default 1MB cap (MF.md 14)
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 30MB
   datasource:
     url: jdbc:sqlite:${user.home}/portfolio.db
     driver-class-name: org.sqlite.JDBC
@@ -41,9 +46,12 @@ app:
   # Base URL used in password-reset emails (AUTH.md h)
   base-url: http://localhost:8081
   mail:
-    from: noreply@portfolio.local
+    from: kiit2005@gmail.com
 
 # SMTP settings for password-reset emails (AUTH.md h).
 # Override via environment (SPRING_MAIL_HOST / SPRING_MAIL_USERNAME / ...).
 # When no host is configured the reset link is logged instead of sent.
-
+# pass below parameter for emial as runtime configuration
+# SPRING_MAIL_HOST=smtp.gmail.com;
+# SPRING_MAIL_USERNAME=rajkiit2005@gmail.com;
+# SPRING_MAIL_PASSWORD=cmztnlfixqzivbdf
