@@ -95,6 +95,8 @@ public class MfServiceImpl implements MfService {
     public MfHeader saveHeader(MfHeader header, String pan) {
         header.setId(null);
         header.setPan(pan);
+        // CONSISTENCY.md 6: the header row mandatorily references the client
+        header.setClient(requireClient(pan));
         resolveScheme(header);
         validate(header);
         if (header.getStatus() == null || header.getStatus().isBlank()) {
@@ -161,6 +163,15 @@ public class MfServiceImpl implements MfService {
             transactionRepository.delete(t);
         }
         headerRepository.delete(h);
+    }
+
+    /** The client behind a PAN - every new header must reference one (CONSISTENCY.md 6). */
+    private Client requireClient(String pan) {
+        List<Client> clients = clientRepository.findByPan(pan);
+        if (clients.isEmpty()) {
+            throw new RuntimeException("Unknown client " + pan);
+        }
+        return clients.get(0);
     }
 
     private void resolveScheme(MfHeader header) {

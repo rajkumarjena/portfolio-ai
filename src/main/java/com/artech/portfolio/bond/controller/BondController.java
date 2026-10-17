@@ -5,9 +5,12 @@ import com.artech.portfolio.bond.service.BondService;
 import com.artech.portfolio.bond.util.BondConstants;
 import com.artech.portfolio.common.controller.AppParamController;
 import com.artech.portfolio.common.entity.AppParamConfig;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/bonds")
@@ -66,5 +69,13 @@ public class BondController {
                         .equalsIgnoreCase(BondConstants.BOND) && x.getParamName()
                         .equalsIgnoreCase(BondConstants.CREDIT_RATING))
                 .toList();
+    }
+
+    /** Validation / not-found errors surface as a clean 400/404, never a 500. */
+    @ExceptionHandler(RuntimeException.class)
+    public ResponseEntity<Map<String, String>> handle(RuntimeException ex) {
+        HttpStatus status = ex.getMessage() != null && ex.getMessage().contains("not found")
+                ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
+        return ResponseEntity.status(status).body(Map.of("message", ex.getMessage()));
     }
 }

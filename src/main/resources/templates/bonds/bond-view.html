@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: page('Bond Records', ~{:: #content}, ~{:: #scripts})}">
+<body>
+<main id="content" th:fragment="content" class="content">
+    <h1>Bond Records</h1>
+
+    <div class="nav-buttons">
+        <a class="btn" href="/index.html"><i data-lucide="house"></i>Home</a>
+        <a class="btn primary" href="/bonds/bond-form.html"><i data-lucide="circle-plus"></i>Add Bond</a>
+    </div>
+
+    <h2>Active Bonds</h2>
+    <table class="data-table" id="activeBonds">
+        <thead>
+        <tr>
+            <th>Name</th><th>Issuer</th><th>Investment Date</th><th>Maturity Date</th><th>Actions</th>
+        </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+    <div class="pagination" id="activePagination"></div>
+
+    <h2>Expired / Matured Bonds</h2>
+    <table class="data-table" id="expiredBonds">
+        <thead>
+        <tr>
+            <th>Name</th><th>Issuer</th><th>Investment Date</th><th>Maturity Date</th><th>Actions</th>
+        </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+    <div class="pagination" id="expiredPagination"></div>
+</main>
+
+<th:block id="scripts" th:fragment="scripts">
+    <script th:src="@{/js/modules/bond-view.js}"></script>
+</th:block>
+</body>
+</html>

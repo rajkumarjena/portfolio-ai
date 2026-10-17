@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: page('Client Configuration', ~{:: #content}, ~{:: #scripts})}">
+<body>
+<main id="content" th:fragment="content" class="content">
+    <h1>Client Configuration</h1>
+    <div class="form-container">
+        <!-- LEFT SIDE: Data Inputs -->
+        <div class="form-left">
+            <div id="modeBanner" class="status-banner" style="display:none;"></div>
+            <form id="clientForm">
+                <div><label>Name</label><input type="text" id="clientName" name="name" required></div>
+                <div><label>PAN</label><input type="text" id="clientPan" name="pan" maxlength="10"
+                                              pattern="[A-Za-z]{5}[0-9]{4}[A-Za-z]"
+                                              title="PAN format: 5 letters, 4 digits, 1 letter (e.g. ABCDE1234F)"
+                                              placeholder="ABCDE1234F" required></div>
+                <div><label>Mobile Number</label><input type="tel" id="mobileNumber" name="mobileNumber"
+                                                        maxlength="10" pattern="[0-9]{10}" title="10-digit mobile number"></div>
+                <div><label>Email</label><input type="email" id="email" name="email"></div>
+                <div><label>Bank Name</label><input type="text" id="bankName" name="bankName"></div>
+                <div><label>Bank Account Number</label><input type="text" id="accountNumber" name="accountNumber"></div>
+                <div><label>IFSC</label><input type="text" id="ifsc" name="ifsc" maxlength="11"
+                                               pattern="[A-Za-z]{4}0[A-Za-z0-9]{6}" title="IFSC format: 4 letters, 0, 6 characters"></div>
+                <div><label>Bank Address</label><textarea id="bankAddress" name="bankAddress"></textarea></div>
+                <button type="submit" id="submitBtn" class="primary">Save Client</button>
+                <p class="hint">A client is identified by PAN. If the PAN already exists, Name and PAN are
+                    locked and you can only add new mobile numbers, emails and bank accounts.</p>
+            </form>
+        </div>
+
+        <!-- RIGHT SIDE: Existing details (visible in append mode) -->
+        <div class="form-right">
+            <div class="calculation-card" id="existingPanel" style="display:none;">
+                <h3>Existing Client Details</h3>
+                <p class="hint" style="margin-top:0;">These details are permanent and cannot be deleted.</p>
+
+                <div><strong>Mobile Numbers</strong></div>
+                <ul class="chip-list" id="existingMobiles"></ul>
+
+                <div><strong>Email Addresses</strong></div>
+                <ul class="chip-list" id="existingEmails"></ul>
+
+                <div><strong>Bank Accounts</strong></div>
+                <ul class="chip-list" id="existingBanks"></ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="nav-buttons">
+        <a class="btn" href="/index.html"><i data-lucide="house"></i>Home</a>
+        <a class="btn" href="/app-client-view.html"><i data-lucide="users"></i>View Clients</a>
+    </div>
+</main>
+
+<th:block id="scripts" th:fragment="scripts">
+    <script th:src="@{/js/modules/client-config.js}"></script>
+</th:block>
+</body>
+</html>

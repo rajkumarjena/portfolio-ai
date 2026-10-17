@@ -1,7 +1,11 @@
 package com.artech.portfolio.mf.entity;
 
+import com.artech.portfolio.client.entity.Client;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.ConstraintMode;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.ForeignKey;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -32,6 +36,24 @@ public class MfHeader {
 
     /** Client PAN this record belongs to - the logged-in user (MF.md 4). */
     private String pan;
+
+    /**
+     * Owning client (CONSISTENCY.md 6): the mandatory header link that lets the
+     * portfolio be tracked per user across investment types. Kept in sync with
+     * {@link #pan} by the services; pan stays the dedupe/business key used by
+     * the CAS import and repository queries.
+     */
+    @JsonIgnore
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "client_id",
+            foreignKey = @ForeignKey(ConstraintMode.NO_CONSTRAINT))
+    private Client client;
+
+    /** Owner client id, read-only convenience for reports. */
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    public Long getClientId() {
+        return client == null ? null : client.getId();
+    }
 
     @ManyToOne(optional = false)
     @JoinColumn(name = "scheme_id", foreignKey = @ForeignKey(ConstraintMode.NO_CONSTRAINT))

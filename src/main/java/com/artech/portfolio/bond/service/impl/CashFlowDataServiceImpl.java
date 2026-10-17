@@ -1,6 +1,6 @@
 package com.artech.portfolio.bond.service.impl;
 
-import com.artech.portfolio.bond.entity.CashFlowData;
+import com.artech.portfolio.bond.entity.BondCashFlow;
 import com.artech.portfolio.bond.repository.CashFlowDTO;
 import com.artech.portfolio.bond.repository.CashFlowDataRepository;
 import com.artech.portfolio.bond.service.CashFlowDataService;
@@ -66,7 +66,7 @@ public class CashFlowDataServiceImpl implements CashFlowDataService {
                 .toList();
     }
 
-    private CashFlowDTO toDTO(CashFlowData cf) {
+    private CashFlowDTO toDTO(BondCashFlow cf) {
         CashFlowDTO dto = new CashFlowDTO();
         dto.setId(cf.getId());
         dto.setAmount(cf.getAmount());

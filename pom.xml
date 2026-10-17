@@ -41,6 +41,12 @@
             <artifactId>spring-boot-starter-mail</artifactId>
         </dependency>
 
+        <!-- Thymeleaf: server-side layout templating (CONSISTENCY.md 1) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-thymeleaf</artifactId>
+        </dependency>
+
         <!-- SQLite JDBC driver -->
         <dependency>
             <groupId>org.xerial</groupId>

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: page('User Roles', ~{:: #content}, ~{:: #scripts})}">
+<body>
+<main id="content" th:fragment="content" class="content">
+    <h1>User Role Management</h1>
+
+    <div class="note">Admins can elevate any user to <strong>SUPERVISOR</strong> or <strong>ADMIN</strong>,
+        or move them back to <strong>USER</strong>. You cannot change your own role here.</div>
+
+    <div id="feedback"></div>
+
+    <table class="data-table" id="userTable">
+        <thead>
+        <tr>
+            <th>Name</th><th>PAN</th><th>Emails</th><th>Current Role</th><th>Status</th>
+            <th>Failed Logins</th><th>Elevate To</th><th>Action</th>
+        </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</main>
+
+<th:block id="scripts" th:fragment="scripts">
+    <script th:src="@{/js/modules/admin-users.js}"></script>
+</th:block>
+</body>
+</html>

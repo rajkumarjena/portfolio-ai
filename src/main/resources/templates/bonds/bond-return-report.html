@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: page('Bond Returns Report', ~{:: #content}, ~{:: #scripts})}">
+<body>
+<main id="content" th:fragment="content" class="content">
+    <h1>Bond Returns Report</h1>
+
+    <!-- Filter Controls -->
+    <div class="filter-section">
+        <label for="filterType">Filter By:</label>
+        <select id="filterType">
+            <option value="all">All</option>
+            <option value="date">Specific Date</option>
+            <option value="month">Month</option>
+            <option value="year">Year</option>
+            <option value="range">Date Range</option>
+        </select>
+
+        <input type="date" id="filterDate" style="display:none;">
+        <input type="month" id="filterMonth" style="display:none;">
+        <input type="number" id="filterYear" placeholder="YYYY" style="display:none;">
+        <input type="date" id="filterStart" style="display:none;">
+        <input type="date" id="filterEnd" style="display:none;">
+
+        <button class="primary" onclick="applyFilter()"><i data-lucide="filter"></i>Apply Filter</button>
+    </div>
+
+    <!-- Report Table -->
+    <table class="data-table" id="reportTable">
+        <thead>
+        <tr>
+            <th>ID</th>
+            <th>Payment Date</th>
+            <th>Interest Return</th>
+            <th>Schedule</th>
+            <th>Redemption</th>
+            <th>Year</th>
+            <th>Bond Ref</th>
+        </tr>
+        </thead>
+        <tbody>
+        <!-- Rows will be populated dynamically -->
+        </tbody>
+    </table>
+
+    <!-- Summary -->
+    <div class="summary-bar" id="summary"></div>
+    <div class="nav-buttons">
+        <a class="btn" href="/index.html"><i data-lucide="house"></i>Home</a>
+    </div>
+</main>
+
+<th:block id="scripts" th:fragment="scripts">
+    <script th:src="@{/js/modules/bond-return-report.js}"></script>
+</th:block>
+</body>
+</html>

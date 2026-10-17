@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: page('Client View', ~{:: #content}, ~{:: #scripts})}">
+<body>
+<main id="content" th:fragment="content" class="content">
+    <h1>Client View</h1>
+
+    <div class="nav-buttons">
+        <a class="btn" href="/app-client-config.html"><i data-lucide="user-plus"></i>Add Client</a>
+    </div>
+
+    <div class="note">Clients are identified by PAN. Name and PAN are permanent &mdash; clients can be updated
+        (add mobiles / emails / bank accounts) but never deleted.</div>
+
+    <div class="search-box">
+        <label>Search</label>
+        <input type="text" id="searchInput" placeholder="Filter by name, PAN or bank..." oninput="applySearch()">
+    </div>
+
+    <table class="data-table" id="clientTable">
+        <thead>
+        <tr>
+            <th>Name</th>
+            <th>PAN</th>
+            <th>Mobile Numbers</th>
+            <th>Email Addresses</th>
+            <th>Bank Accounts</th>
+            <th>Actions</th>
+        </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</main>
+
+<th:block id="scripts" th:fragment="scripts">
+    <script th:src="@{/js/modules/client-view.js}"></script>
+</th:block>
+</body>
+</html>

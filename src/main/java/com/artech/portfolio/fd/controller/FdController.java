@@ -3,9 +3,12 @@ package com.artech.portfolio.fd.controller;
 import com.artech.portfolio.common.entity.AppParamConfig;
 import com.artech.portfolio.fd.entity.FixedDeposit;
 import com.artech.portfolio.fd.service.FdService;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/fds")
@@ -47,5 +50,13 @@ public class FdController {
     @GetMapping("/banks")
     public List<AppParamConfig> getBankNames() {
         return fdService.getBankNames();
+    }
+
+    /** Validation / not-found errors surface as a clean 400/404, never a 500. */
+    @ExceptionHandler(RuntimeException.class)
+    public ResponseEntity<Map<String, String>> handle(RuntimeException ex) {
+        HttpStatus status = ex.getMessage() != null && ex.getMessage().contains("not found")
+                ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
+        return ResponseEntity.status(status).body(Map.of("message", ex.getMessage()));
     }
 }

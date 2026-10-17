@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<!--
+  Guest layout for the pre-login screens (login, register, password reset).
+  No sidebar, no user chip - just the shared head, the centered card slot and
+  the core scripts, so the auth pages still follow the same design system.
+-->
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:fragment="page(title, content, scripts)">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title th:text="${title} + ' | Portfolio'">Portfolio</title>
+    <link rel="stylesheet" th:href="@{/css/global.css}">
+    <link rel="stylesheet" th:href="@{/css/components.css}">
+    <script th:src="@{/js/vendor/lucide.min.js}"></script>
+</head>
+
+<body>
+<div class="guest-app">
+    <header class="guest-topbar">
+        <span class="brand-mark">P</span>
+        <span class="guest-brand">Portfolio</span>
+    </header>
+    <main class="guest-content" id="content" th:replace="${content}">
+        Page content
+    </main>
+</div>
+
+<script th:src="@{/js/csrf.js}"></script>
+<script th:src="@{/js/api.js}"></script>
+<script th:src="@{/js/app.js}"></script>
+<th:block th:replace="${scripts}"/>
+</body>
+</html>

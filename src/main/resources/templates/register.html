@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout-guest :: page('Register', ~{:: #content}, ~{:: #scripts})}">
+<body>
+<main id="content" th:fragment="content" class="guest-content">
+    <div class="auth-card">
+        <h2>Create your account</h2>
+        <div class="note">
+            Your PAN is your identity in this application. New accounts start with the <strong>USER</strong> role.
+        </div>
+
+        <div id="formError" class="form-error" style="display:none;"></div>
+
+        <form id="registerForm">
+            <label for="name">Full Name</label>
+            <input type="text" id="name" name="name" required>
+
+            <label for="pan">PAN Number</label>
+            <input type="text" id="pan" name="pan" maxlength="10" required
+                   pattern="[A-Za-z]{5}[0-9]{4}[A-Za-z]"
+                   title="PAN format: 5 letters, 4 digits, 1 letter (e.g. ABCDE1234F)"
+                   placeholder="ABCDE1234F">
+
+            <label for="email">Email Address</label>
+            <input type="email" id="email" name="email" required>
+            <div class="hint">Used for password reset links.</div>
+
+            <label for="mobileNumber">Mobile Number (optional)</label>
+            <input type="tel" id="mobileNumber" name="mobileNumber" maxlength="10"
+                   pattern="[0-9]{10}" title="10-digit mobile number">
+
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required
+                   minlength="8" autocomplete="new-password">
+            <div class="hint">At least 8 characters, with letters and digits.</div>
+
+            <label for="confirmPassword">Confirm Password</label>
+            <input type="password" id="confirmPassword" name="confirmPassword" required
+                   autocomplete="new-password">
+
+            <button type="submit">Register</button>
+        </form>
+
+        <div class="auth-links">
+            Already registered? <a href="/login.html">Sign in</a>
+        </div>
+    </div>
+</main>
+
+<th:block id="scripts" th:fragment="scripts">
+    <script th:src="@{/js/modules/register.js}"></script>
+</th:block>
+</body>
+</html>

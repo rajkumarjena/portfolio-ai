@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: page('Mutual Fund Portfolio', ~{:: #content}, ~{:: #scripts})}">
+<body>
+<main id="content" th:fragment="content" class="content">
+    <h1>Mutual Fund Portfolio</h1>
+    <p class="muted">All mutual fund holdings against your PAN - totals update with every
+        search (MF.md 18 / 19). Open a row for its detail report (MF.md 17).</p>
+
+    <div class="nav-buttons" style="margin-top:0;">
+        <a class="btn" href="/index.html"><i data-lucide="house"></i>Home</a>
+        <a class="btn primary" href="/mutualfunds/mf-sip-form.html"><i data-lucide="circle-plus"></i>Add</a>
+        <a class="btn" href="/mutualfunds/mf-view.html"><i data-lucide="list-checks"></i>SIP View</a>
+        <a class="btn" href="/mutualfunds/mf-portfolio-transactions.html"><i data-lucide="list"></i>All Transactions</a>
+        <a class="btn" href="/mutualfunds/mf-import.html"><i data-lucide="file-up"></i>Import from MF Central</a>
+    </div>
+
+    <!-- portfolio summary (MF.md 18) -->
+    <div class="cards" id="summaryCards"></div>
+
+    <!-- search criteria (MF.md 19) -->
+    <div class="filter-section">
+        <label>From</label><input type="date" id="fromDate">
+        <label>To</label><input type="date" id="toDate">
+        <label>Fund house / AMC</label>
+        <select id="amcFilter"><option value="">All</option></select>
+        <label>Category</label>
+        <select id="categoryFilter"><option value="">All</option></select>
+        <label>Status</label>
+        <select id="statusFilter">
+            <option value="">All</option>
+            <option value="ACTIVE">Active</option>
+            <option value="PAUSED">Paused</option>
+            <option value="CANCELLED">Cancelled</option>
+            <option value="CLOSED">Closed</option>
+        </select>
+        <label>Search</label>
+        <input type="search" id="searchBox" placeholder="scheme / AMC / folio / notes">
+        <button class="primary" onclick="load()"><i data-lucide="filter"></i>Apply</button>
+        <button onclick="resetFilters()">Reset</button>
+    </div>
+
+    <table class="data-table" id="headerTable">
+        <thead>
+        <tr>
+            <th>Scheme</th><th>AMC</th><th>Category</th><th>Folio</th><th>Reg. Type</th>
+            <th>Units</th><th>Invested (₹)</th><th>Current (₹)</th><th>Returns (₹)</th>
+            <th>Status</th><th class="left">Actions</th>
+        </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+    <div id="emptyNote" class="muted" style="display:none; padding:12px;">
+        No mutual funds match this search.
+    </div>
+
+    <!-- detail report modal (MF.md 17) -->
+    <div class="modal-overlay" id="detailModal">
+        <div class="modal wide">
+            <button class="close-x" onclick="closeDetail()">&times;</button>
+            <h3 id="detailTitle">Detail Report</h3>
+            <div class="cards" id="detailCards"></div>
+            <table class="data-table" id="detailTable">
+                <thead>
+                <tr>
+                    <th>Date</th><th>Type</th><th class="left">Description</th>
+                    <th>Units</th><th>NAV</th><th>Amount (₹)</th><th>Source</th>
+                </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</main>
+
+<th:block id="scripts" th:fragment="scripts">
+    <script th:src="@{/js/modules/mf-portfolio.js}"></script>
+</th:block>
+</body>
+</html>

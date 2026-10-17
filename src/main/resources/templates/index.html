@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: page('Dashboard', ~{:: #content}, ~{:: #scripts})}">
+<body>
+<main id="content" th:fragment="content" class="content">
+    <h1>Portfolio Dashboard</h1>
+    <p class="muted" th:if="${currentUser != null}">
+        Signed in as <strong th:text="${currentUser.displayName}">User (USER)</strong>
+        &mdash; every investment below is tracked against your client id.
+    </p>
+
+    <div class="dash-grid">
+        <div class="dash-card">
+            <h2><i data-lucide="landmark"></i>Bonds</h2>
+            <div class="dash-links">
+                <a href="/bonds/bond-form.html"><i data-lucide="circle-plus"></i>Add New Bond</a>
+                <a href="/bonds/bond-view.html"><i data-lucide="scroll-text"></i>View Bonds</a>
+                <a href="/bonds/bond-return-report.html"><i data-lucide="chart-no-axes-combined"></i>Bond Returns Report</a>
+            </div>
+        </div>
+
+        <div class="dash-card">
+            <h2><i data-lucide="badge-indian-rupee"></i>Fixed Deposits (FD)</h2>
+            <div class="dash-links">
+                <a href="/fds/fd-form.html"><i data-lucide="circle-plus"></i>Add New FD</a>
+                <a href="/fds/fd-view.html"><i data-lucide="rows-3"></i>View FDs</a>
+            </div>
+        </div>
+
+        <div class="dash-card">
+            <h2><i data-lucide="briefcase"></i>Mutual Funds</h2>
+            <div class="dash-links">
+                <a href="/mutualfunds/mf-sip-form.html"><i data-lucide="circle-plus"></i>Add New Mutual Fund SIP</a>
+                <a href="/mutualfunds/mf-view.html"><i data-lucide="list-checks"></i>View Active Mutual Fund SIPs</a>
+                <a href="/mutualfunds/mf-portfolio.html"><i data-lucide="layout-grid"></i>Mutual Fund Portfolios</a>
+                <a href="/mutualfunds/mf-portfolio-transactions.html"><i data-lucide="list"></i>Mutual Fund Portfolio Transactions</a>
+                <a href="/mutualfunds/mf-import.html"><i data-lucide="file-up"></i>Import Mutual Fund from MF Central</a>
+                <a href="/mutualfunds/mf-import-view.html"><i data-lucide="refresh-cw"></i>Validate and Sync Mutual Fund</a>
+            </div>
+        </div>
+
+        <div class="dash-card">
+            <h2><i data-lucide="candlestick-chart"></i>Shares</h2>
+            <div class="dash-links">
+                <a href="/shares/share-form.html"><i data-lucide="circle-plus"></i>Add New Share</a>
+                <a href="/shares/share-view.html"><i data-lucide="scroll-text"></i>View Shares</a>
+            </div>
+        </div>
+
+        <div class="dash-card">
+            <h2><i data-lucide="package"></i>Smallcase</h2>
+            <div class="dash-links">
+                <a href="/smallcase/smallcase-form.html"><i data-lucide="circle-plus"></i>Add New Smallcase</a>
+                <a href="/smallcase/smallcase-view.html"><i data-lucide="scroll-text"></i>View Smallcases</a>
+            </div>
+        </div>
+
+        <div class="dash-card">
+            <h2><i data-lucide="settings"></i>Application</h2>
+            <div class="dash-links">
+                <a href="/app-param-config.html"><i data-lucide="sliders-horizontal"></i>Add Application Parameter</a>
+                <a href="/app-client-config.html"><i data-lucide="user-plus"></i>Add Client</a>
+                <a href="/app-client-view.html"><i data-lucide="users"></i>View Clients</a>
+            </div>
+        </div>
+    </div>
+</main>
+
+<th:block id="scripts" th:fragment="scripts">
+</th:block>
+</body>
+</html>

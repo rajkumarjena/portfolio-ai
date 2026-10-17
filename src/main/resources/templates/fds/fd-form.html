@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: page('Fixed Deposit Entry', ~{:: #content}, ~{:: #scripts})}">
+<body>
+<main id="content" th:fragment="content" class="content">
+    <h1>Fixed Deposit Details Entry</h1>
+    <div class="form-container">
+        <!-- LEFT SIDE: Data Inputs -->
+        <div class="form-left">
+            <div id="statusBanner" class="status-banner" style="display:none;"></div>
+            <form id="fdForm">
+                <div>
+                    <label>Bank Name</label>
+                    <select id="bankSelect" name="bankName" required></select>
+                </div>
+                <div>
+                    <label>Tenure Period</label>
+                    <select name="tenureMonths" id="tenureSelect" required>
+                        <option value="6">6 Months</option>
+                        <option value="12">1 Year</option>
+                        <option value="24">2 Years</option>
+                        <option value="36">3 Years</option>
+                        <option value="60">5 Years</option>
+                        <option value="120">10 Years</option>
+                    </select>
+                </div>
+                <div><label>Fixed Deposit Date</label><input type="date" id="depositDate" name="depositDate" required></div>
+                <div><label>Mature Date</label><input type="date" id="maturityDate" name="maturityDate" required></div>
+                <div><label>Fixed Deposit Amount</label><input type="number" id="depositAmount" name="depositAmount" min="1" step="0.01" required></div>
+                <div><label>Interest %</label><input type="number" id="interestRate" name="interestRate" min="0" step="0.01" required></div>
+                <div><label>Mature Amount</label><input type="number" id="maturityAmount" name="maturityAmount" min="0" step="0.01" required></div>
+                <div><label>Notes</label><textarea name="notes"></textarea></div>
+                <button type="submit" id="saveBtn" class="primary">Save Fixed Deposit</button>
+            </form>
+        </div>
+
+        <!-- RIGHT SIDE: Live Calculation + Premature Closure -->
+        <div class="form-right">
+            <div class="calculation-card">
+                <h3>Live Calculations</h3>
+                <div class="total-display-group">
+                    <label for="interestEstimate">Estimated Interest (simple)</label>
+                    <input type="number" id="interestEstimate" readonly placeholder="0">
+                </div>
+                <div class="total-display-group">
+                    <label for="maturityEstimate">Estimated Mature Amount</label>
+                    <input type="number" id="maturityEstimate" readonly placeholder="0">
+                </div>
+                <button type="button" id="applyEstimateBtn" class="primary" style="margin-top:12px;">
+                    Apply Estimate to Mature Amount
+                </button>
+            </div>
+
+            <div class="calculation-card" id="closureCard" style="display:none;">
+                <h3>Premature Closure</h3>
+                <div><label>Closure Date</label><input type="date" id="closureDate" name="closureDate"></div>
+                <div><label>Closure Amount</label><input type="number" id="closureAmount" name="closureAmount" min="0" step="0.01"></div>
+                <div><label>Closure Reason</label><textarea id="closureReason" name="closureReason"></textarea></div>
+                <button type="button" id="closeFdBtn" class="danger" style="margin-top:10px;">
+                    Close Fixed Deposit
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="nav-buttons">
+        <a class="btn" href="/index.html"><i data-lucide="house"></i>Home</a>
+        <a class="btn" href="/fds/fd-view.html"><i data-lucide="rows-3"></i>View Fixed Deposits</a>
+    </div>
+</main>
+
+<th:block id="scripts" th:fragment="scripts">
+    <script th:src="@{/js/modules/fd-form.js}"></script>
+</th:block>
+</body>
+</html>

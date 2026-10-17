@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout-guest :: page('Sign in', ~{:: #content}, ~{:: #scripts})}">
+<body>
+<main id="content" th:fragment="content" class="guest-content">
+    <div class="auth-card">
+        <h2>Portfolio Sign in</h2>
+
+        <div id="banner" class="banner" style="display:none;"></div>
+
+        <form id="loginForm" action="/login" method="post">
+            <input type="hidden" name="_csrf" id="csrfField" th:value="${_csrf.token}">
+            <input type="hidden" name="next" id="nextField" value="/index.html">
+
+            <label for="username">PAN Number</label>
+            <input type="text" id="username" name="username" maxlength="10" autocomplete="username"
+                   placeholder="ABCDE1234F" pattern="[A-Za-z]{5}[0-9]{4}[A-Za-z]"
+                   title="PAN format: 5 letters, 4 digits, 1 letter (e.g. ABCDE1234F)" required autofocus>
+
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" autocomplete="current-password" required>
+
+            <button type="submit">Sign in</button>
+        </form>
+
+        <div class="auth-links">
+            Not registered yet? <a href="/register.html">Create an account</a><br>
+            <a href="/forgot-password.html">Forgot password?</a>
+        </div>
+    </div>
+</main>
+
+<th:block id="scripts" th:fragment="scripts">
+    <script th:src="@{/js/modules/login.js}"></script>
+</th:block>
+</body>
+</html>

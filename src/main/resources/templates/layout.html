@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<!--
+  Master layout (CONSISTENCY.md 1). Pages compose themselves from it:
+
+      <html th:replace="~{layout :: page('Bond Entry', ~{:: #content}, ~{:: #scripts})}">
+      <body>
+        <main id="content" th:fragment="content" class="content"> ...page body... </main>
+        <th:block id="scripts" th:fragment="scripts">
+            <script th:src="@{/js/modules/bond-form.js}"></script>
+        </th:block>
+      </body>
+      </html>
+
+  Only the page body is written per screen - head, sidebar, the signed-in
+  user chip (top-right, CONSISTENCY.md 5) and footer live here once.
+-->
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:fragment="page(title, content, scripts)">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title th:text="${title} + ' | Portfolio'">Portfolio</title>
+    <link rel="stylesheet" th:href="@{/css/global.css}">
+    <link rel="stylesheet" th:href="@{/css/components.css}">
+    <!-- Single icon set for the whole app (CONSISTENCY.md 4) -->
+    <script th:src="@{/js/vendor/lucide.min.js}"></script>
+</head>
+
+<body>
+<div class="app">
+    <!-- ============================================================ sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            <span class="brand-mark">P</span>
+            <span>Portfolio</span>
+        </div>
+        <nav class="sidebar-nav">
+            <a th:href="@{/index.html}" class="nav-link"><i data-lucide="layout-dashboard"></i>Dashboard</a>
+
+            <div class="nav-group">Investments</div>
+            <a th:href="@{/bonds/bond-form.html}" class="nav-link"><i data-lucide="landmark"></i>Add Bond</a>
+            <a th:href="@{/bonds/bond-view.html}" class="nav-link"><i data-lucide="scroll-text"></i>View Bonds</a>
+            <a th:href="@{/bonds/bond-return-report.html}" class="nav-link"><i data-lucide="chart-no-axes-combined"></i>Bond Returns</a>
+            <a th:href="@{/fds/fd-form.html}" class="nav-link"><i data-lucide="badge-indian-rupee"></i>Add Fixed Deposit</a>
+            <a th:href="@{/fds/fd-view.html}" class="nav-link"><i data-lucide="rows-3"></i>View Fixed Deposits</a>
+            <a th:href="@{/mutualfunds/mf-sip-form.html}" class="nav-link"><i data-lucide="circle-plus"></i>Add Mutual Fund</a>
+            <a th:href="@{/mutualfunds/mf-view.html}" class="nav-link"><i data-lucide="list-checks"></i>MF SIPs</a>
+            <a th:href="@{/mutualfunds/mf-portfolio.html}" class="nav-link"><i data-lucide="briefcase"></i>MF Portfolio</a>
+            <a th:href="@{/mutualfunds/mf-portfolio-transactions.html}" class="nav-link"><i data-lucide="list"></i>MF Transactions</a>
+            <a th:href="@{/mutualfunds/mf-import.html}" class="nav-link"><i data-lucide="file-up"></i>Import MF Central</a>
+            <a th:href="@{/mutualfunds/mf-import-view.html}" class="nav-link"><i data-lucide="refresh-cw"></i>Validate &amp; Sync</a>
+
+            <div class="nav-group">Administration</div>
+            <a th:href="@{/app-client-config.html}" class="nav-link"><i data-lucide="user-plus"></i>Add Client</a>
+            <a th:href="@{/app-client-view.html}" class="nav-link"><i data-lucide="users"></i>View Clients</a>
+            <a th:href="@{/app-param-config.html}" class="nav-link"><i data-lucide="sliders-horizontal"></i>App Parameters</a>
+            <a th:href="@{/admin-users.html}" class="nav-link" th:if="${currentUser != null and currentUser.admin}">
+                <i data-lucide="shield-check"></i>Manage Users</a>
+        </nav>
+    </aside>
+
+    <!-- ============================================================== main -->
+    <div class="main">
+        <header class="topbar">
+            <button class="menu-toggle" id="menuToggle" type="button" aria-label="Toggle navigation">
+                <i data-lucide="menu"></i>
+            </button>
+            <div class="topbar-title"></div>
+            <!-- Signed-in user, top-right on every page (CONSISTENCY.md 5) -->
+            <div class="user-box" th:if="${currentUser != null}">
+                <span class="user-chip">
+                    <i data-lucide="circle-user-round"></i>
+                    <span th:text="${currentUser.displayName}">User (USER)</span>
+                </span>
+                <button class="btn btn-secondary btn-sm" type="button" onclick="App.logout()">
+                    <i data-lucide="log-out"></i>Logout
+                </button>
+            </div>
+        </header>
+
+        <main class="content" id="content" th:replace="${content}">
+            Page content
+        </main>
+
+        <footer class="footer">
+            Portfolio &mdash; personal investment tracker
+        </footer>
+    </div>
+</div>
+
+<script th:src="@{/js/csrf.js}"></script>
+<script th:src="@{/js/api.js}"></script>
+<script th:src="@{/js/app.js}"></script>
+<th:block th:replace="${scripts}"/>
+</body>
+</html>

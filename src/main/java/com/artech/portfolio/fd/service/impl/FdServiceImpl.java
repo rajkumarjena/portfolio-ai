@@ -1,5 +1,7 @@
 package com.artech.portfolio.fd.service.impl;
 
+import com.artech.portfolio.auth.service.CurrentUserService;
+import com.artech.portfolio.client.entity.Client;
 import com.artech.portfolio.common.entity.AppParamConfig;
 import com.artech.portfolio.common.repository.AppParamRepository;
 import com.artech.portfolio.fd.entity.FixedDeposit;
@@ -15,11 +17,14 @@ import java.util.List;
 public class FdServiceImpl implements FdService {
     private final FixedDepositRepository fixedDepositRepository;
     private final AppParamRepository appParamRepository;
+    private final CurrentUserService currentUserService;
 
     public FdServiceImpl(FixedDepositRepository fixedDepositRepository,
-                         AppParamRepository appParamRepository) {
+                         AppParamRepository appParamRepository,
+                         CurrentUserService currentUserService) {
         this.fixedDepositRepository = fixedDepositRepository;
         this.appParamRepository = appParamRepository;
+        this.currentUserService = currentUserService;
     }
 
     /**
@@ -55,23 +60,33 @@ public class FdServiceImpl implements FdService {
         if (fixedDeposit.getStatus() == null || fixedDeposit.getStatus().isBlank()) {
             fixedDeposit.setStatus(FdConstants.STATUS_ACTIVE);
         }
+        // CONSISTENCY.md 6: the logged-in client owns the row; any client id in
+        // the request body is ignored (reset() also detaches a lazy-loaded one).
+        fixedDeposit.setId(null);
+        fixedDeposit.setClient(currentUserService.requireClient());
         return fixedDepositRepository.save(fixedDeposit);
     }
 
     @Override
     public List<FixedDeposit> getAllFixedDeposits() {
-        return fixedDepositRepository.findAll();
+        // ADMIN sees the whole book for dashboard reporting; everyone else only
+        // their own rows (CONSISTENCY.md 6).
+        if (currentUserService.isAdmin()) {
+            return fixedDepositRepository.findAll();
+        }
+        Client me = currentUserService.requireClient();
+        return fixedDepositRepository.findByClientId(me.getId());
     }
 
     @Override
     public FixedDeposit getFixedDepositById(Long id) {
-        return fixedDepositRepository.findById(id)
+        return loadOwned(id)
                 .orElseThrow(() -> new RuntimeException("Fixed deposit not found with id " + id));
     }
 
     @Override
     public FixedDeposit updateFixedDeposit(Long id, FixedDeposit fixedDepositDetails) {
-        return fixedDepositRepository.findById(id).map(fd -> {
+        return loadOwned(id).map(fd -> {
             fd.setBankName(fixedDepositDetails.getBankName());
             fd.setDepositAmount(fixedDepositDetails.getDepositAmount());
             fd.setTenureMonths(fixedDepositDetails.getTenureMonths());
@@ -84,6 +99,7 @@ public class FdServiceImpl implements FdService {
             fd.setClosureAmount(fixedDepositDetails.getClosureAmount());
             fd.setClosureReason(fixedDepositDetails.getClosureReason());
             fd.setNotes(fixedDepositDetails.getNotes());
+            // owner never changes on update
 
             validate(fd);
             return fixedDepositRepository.save(fd);
@@ -92,13 +108,33 @@ public class FdServiceImpl implements FdService {
 
     @Override
     public void deleteFixedDeposit(Long id) {
-        fixedDepositRepository.deleteById(id);
+        FixedDeposit fd = loadOwned(id)
+                .orElseThrow(() -> new RuntimeException("Fixed deposit not found with id " + id));
+        fixedDepositRepository.delete(fd);
     }
 
     @Override
     public List<AppParamConfig> getBankNames() {
         return appParamRepository
                 .findByInvestmentTypeAndParamName(FdConstants.FD, FdConstants.BANK);
+    }
+
+    /**
+     * Loads a deposit and enforces ownership (CONSISTENCY.md 6): a non-admin
+     * user gets the "not found" outcome for anyone else's row so ids cannot be
+     * probed across clients.
+     */
+    private java.util.Optional<FixedDeposit> loadOwned(Long id) {
+        FixedDeposit fd = fixedDepositRepository.findById(id).orElse(null);
+        if (fd == null) {
+            return java.util.Optional.empty();
+        }
+        if (currentUserService.isAdmin()) {
+            return java.util.Optional.of(fd);
+        }
+        Client me = currentUserService.requireClient();
+        return fd.getClient() != null && fd.getClient().getId().equals(me.getId())
+                ? java.util.Optional.of(fd) : java.util.Optional.empty();
     }
 
     private void validate(FixedDeposit fd) {

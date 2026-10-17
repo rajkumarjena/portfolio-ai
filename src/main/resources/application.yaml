@@ -1,5 +1,5 @@
 server:
-  port: 8080
+  port: 8081
 spring:
   application:
     name: portfolio
@@ -42,7 +42,7 @@ pf:
     dateInput: yyyy-MM-dd
 app:
   config:
-    refreshRateDuration: PT24H
+    refreshRateDuration: PT24S
   # Base URL used in password-reset emails (AUTH.md h)
   base-url: http://localhost:8081
   mail:

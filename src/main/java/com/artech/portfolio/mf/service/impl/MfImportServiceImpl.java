@@ -1,5 +1,7 @@
 package com.artech.portfolio.mf.service.impl;
 
+import com.artech.portfolio.client.entity.Client;
+import com.artech.portfolio.client.repository.ClientRepository;
 import com.artech.portfolio.mf.entity.MfHeader;
 import com.artech.portfolio.mf.entity.MfImportBatch;
 import com.artech.portfolio.mf.entity.MfImportLine;
@@ -51,18 +53,21 @@ public class MfImportServiceImpl implements MfImportService {
     private final MfSchemeRepository schemeRepository;
     private final MfHeaderRepository headerRepository;
     private final MfTransactionRepository transactionRepository;
+    private final ClientRepository clientRepository;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public MfImportServiceImpl(MfImportBatchRepository batchRepository,
                                MfImportLineRepository lineRepository,
                                MfSchemeRepository schemeRepository,
                                MfHeaderRepository headerRepository,
-                               MfTransactionRepository transactionRepository) {
+                               MfTransactionRepository transactionRepository,
+                               ClientRepository clientRepository) {
         this.batchRepository = batchRepository;
         this.lineRepository = lineRepository;
         this.schemeRepository = schemeRepository;
         this.headerRepository = headerRepository;
         this.transactionRepository = transactionRepository;
+        this.clientRepository = clientRepository;
     }
 
     // ----------------------------------------------------------------- upload
@@ -705,6 +710,12 @@ public class MfImportServiceImpl implements MfImportService {
     private MfHeader createHeader(String pan, MfScheme scheme, String folio) {
         MfHeader h = new MfHeader();
         h.setPan(pan);
+        // CONSISTENCY.md 6: accepted import rows mandatorily reference the client
+        List<Client> owners = clientRepository.findByPan(pan);
+        if (owners.isEmpty()) {
+            throw new RuntimeException("Unknown client " + pan);
+        }
+        h.setClient(owners.get(0));
         h.setScheme(scheme);
         h.setFolioNo(folio == null ? "" : folio);
         h.setRegistrationType(MfConstants.REG_ONE_TIME);

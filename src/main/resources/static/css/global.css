@@ -1,0 +1,240 @@
+/* ==========================================================================
+   global.css - design tokens, typography and the app shell layout.
+   Linked once from the master layout (CONSISTENCY.md 2).
+   Palette is deliberately limited to three colors (CONSISTENCY.md 4):
+     primary  #0056b3  - brand blue for actions / headers
+     accent   #0f766e  - subtle teal for secondary highlights
+     neutral  white / light-gray scale for surfaces and text
+   Status colors (green / amber / red) are semantic only: pass / warn / fail.
+   Spacing follows an 8px rhythm with a 24px page gutter (CONSISTENCY.md 4).
+   ========================================================================== */
+
+:root {
+    /* ---- color tokens ---- */
+    --color-primary: #0056b3;
+    --color-primary-dark: #004494;
+    --color-primary-soft: #e7f0fa;
+    --color-accent: #0f766e;
+    --color-accent-soft: #e6f4f2;
+
+    --color-bg: #f4f7fb;
+    --color-surface: #ffffff;
+    --color-border: #d7dce4;
+    --color-text: #24303f;
+    --color-text-muted: #6c7683;
+
+    --color-pass: #198754;
+    --color-pass-soft: #d9efe4;
+    --color-warn: #ffc107;
+    --color-warn-soft: #fff4d6;
+    --color-fail: #dc3545;
+    --color-fail-soft: #fbe3e5;
+    --color-info-soft: #e7f0fa;
+    --color-neutral-soft: #eceff3;
+
+    /* ---- typography ---- */
+    --font-stack: "Segoe UI", Arial, Helvetica, sans-serif;
+    --fs-page: 22px;
+    --fs-section: 16px;
+    --fs-body: 14px;
+    --fs-small: 12px;
+
+    /* ---- spacing scale (8px rhythm, 24px gutters) ---- */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 24px;
+    --space-6: 32px;
+
+    --radius: 8px;
+    --shadow: 0 2px 6px rgba(20, 32, 48, 0.08);
+    --sidebar-width: 240px;
+}
+
+/* ------------------------------------------------------------- reset ---- */
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    font-family: var(--font-stack);
+    font-size: var(--fs-body);
+    color: var(--color-text);
+    background: var(--color-bg);
+}
+
+/* ---------------------------------------------------------- typography ---- */
+h1, .page-title { font-size: var(--fs-page); margin: 0 0 var(--space-4); }
+h2 { font-size: 18px; margin: var(--space-5) 0 var(--space-3); }
+h3 { font-size: var(--fs-section); margin: 0 0 var(--space-2); color: var(--color-primary); }
+p  { margin: 0 0 var(--space-3); line-height: 1.5; }
+a  { color: var(--color-primary); }
+
+.muted { color: var(--color-text-muted); font-size: var(--fs-small); }
+
+/* ------------------------------------------------------------ app shell -- */
+.app {
+    display: grid;
+    grid-template-columns: var(--sidebar-width) 1fr;
+    min-height: 100vh;
+}
+
+.sidebar {
+    background: var(--color-surface);
+    border-right: 1px solid var(--color-border);
+    padding: var(--space-4) var(--space-3);
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+}
+
+.sidebar-brand {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--fs-section);
+    font-weight: 700;
+    color: var(--color-primary);
+    margin-bottom: var(--space-4);
+}
+
+.brand-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: var(--radius);
+    background: var(--color-primary);
+    color: #fff;
+    font-weight: 700;
+}
+
+.sidebar-nav { display: flex; flex-direction: column; gap: 2px; }
+
+.nav-group {
+    margin: var(--space-4) 0 var(--space-1);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-text-muted);
+    padding-left: var(--space-2);
+}
+
+.nav-link {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius);
+    color: var(--color-text);
+    text-decoration: none;
+}
+
+.nav-link:hover { background: var(--color-primary-soft); color: var(--color-primary); }
+.nav-link.active { background: var(--color-primary); color: #fff; }
+.nav-link svg { width: 16px; height: 16px; flex: none; }
+
+.main { display: flex; flex-direction: column; min-width: 0; }
+
+.topbar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    padding: var(--space-3) var(--space-5);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.topbar-title { flex: 1; font-weight: 600; }
+
+.menu-toggle {
+    display: none;
+    background: none;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: var(--space-2);
+    cursor: pointer;
+}
+
+/* signed-in user, top-right of every page (CONSISTENCY.md 5) */
+.user-box { display: flex; align-items: center; gap: var(--space-3); }
+
+.user-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    background: var(--color-accent-soft);
+    color: var(--color-accent);
+    border-radius: 999px;
+    padding: var(--space-1) var(--space-3);
+    font-weight: 600;
+    font-size: var(--fs-small);
+}
+
+.user-chip svg { width: 16px; height: 16px; }
+
+.content {
+    flex: 1;
+    padding: var(--space-5);
+    max-width: 1500px;
+    width: 100%;
+}
+
+.footer {
+    padding: var(--space-3) var(--space-5);
+    border-top: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+    font-size: var(--fs-small);
+}
+
+/* --------------------------------------------------------- guest pages --- */
+.guest-app {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background:
+        url('/assets/fd-background.svg') no-repeat center center fixed;
+    background-size: cover;
+}
+
+.guest-topbar {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-4) var(--space-5);
+    color: var(--color-primary);
+    font-weight: 700;
+    font-size: var(--fs-section);
+}
+
+.guest-brand { letter-spacing: 0.02em; }
+
+.guest-content {
+    width: min(480px, 92vw);
+    margin: var(--space-6) 0 var(--space-6);
+}
+
+/* ----------------------------------------------------------- responsive -- */
+@media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+    .sidebar {
+        position: fixed;
+        z-index: 40;
+        left: 0;
+        top: 0;
+        width: var(--sidebar-width);
+        transform: translateX(-100%);
+        transition: transform 0.18s ease-in-out;
+    }
+    .sidebar.open { transform: translateX(0); }
+    .menu-toggle { display: inline-flex; }
+    .content { padding: var(--space-4); }
+}

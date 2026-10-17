@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: page('Application Parameters', ~{:: #content}, ~{:: #scripts})}">
+<body>
+<main id="content" th:fragment="content" class="content">
+    <h1>Application Parameter Configuration</h1>
+    <div class="form-container">
+        <!-- LEFT SIDE: Data Inputs -->
+        <div class="form-left">
+            <form id="bondForm">
+                <div>
+                    <label>Investment Type</label>
+                    <select name="investmentType" required>
+                        <option value="bond">BOND</option>
+                        <option value="fd">FD</option>
+                        <option value="share">SHARE</option>
+                        <option value="equity-mutual-fund">EQUITY MUTUAL FUND-</option>
+                        <option value="debt-mutual-fund">DEBT MUTUAL FUND</option>
+                        <option value="smallcase">SMALLCASE</option>
+                    </select>
+                </div>
+                <div><label>Parameter Name</label><input type="text" name="paramName" required></div>
+                <div><label>Parameter Value</label><input type="text" name="paramValue" required></div>
+                <div>
+                    <label>Note</label>
+                    <textarea name="note" rows="4" cols="50"></textarea>
+                </div>
+                <button type="submit" class="primary">Save Param</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="nav-buttons">
+        <a class="btn" href="/index.html"><i data-lucide="house"></i>Home</a>
+    </div>
+</main>
+
+<th:block id="scripts" th:fragment="scripts">
+    <script th:src="@{/js/modules/param-config.js}"></script>
+</th:block>
+</body>
+</html>
