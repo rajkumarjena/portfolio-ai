@@ -88,6 +88,11 @@
     </div>
 </div>
 
+<!-- Role for the page scripts (BONDBP A.5/A.6): server-rendered once, never
+     fetched by the pages themselves. -->
+<script th:inline="javascript">
+    window.APP_USER_ROLE = /*[[${currentUser != null ? currentUser.role() : null}]]*/null;
+</script>
 <script th:src="@{/js/csrf.js}"></script>
 <script th:src="@{/js/api.js}"></script>
 <script th:src="@{/js/app.js}"></script>

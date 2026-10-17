@@ -1,5 +1,6 @@
 package com.artech.portfolio.bond.service.impl;
 
+import com.artech.portfolio.auth.service.CurrentUserService;
 import com.artech.portfolio.bond.entity.BondCashFlow;
 import com.artech.portfolio.bond.repository.CashFlowDTO;
 import com.artech.portfolio.bond.repository.CashFlowDataRepository;
@@ -14,56 +15,82 @@ import java.util.List;
 public class CashFlowDataServiceImpl implements CashFlowDataService {
     private final CashFlowDataRepository cashFlowDataRepository;
     private final DateUtils dateUtils;
+    private final CurrentUserService currentUserService;
 
-    public CashFlowDataServiceImpl(CashFlowDataRepository cashFlowDataRepository, DateUtils dateUtils) {
+    public CashFlowDataServiceImpl(CashFlowDataRepository cashFlowDataRepository,
+                                   DateUtils dateUtils,
+                                   CurrentUserService currentUserService) {
         this.cashFlowDataRepository = cashFlowDataRepository;
         this.dateUtils = dateUtils;
+        this.currentUserService = currentUserService;
+    }
+
+    /**
+     * BONDBP B.3: null means "no client filter" (ADMIN sees every client's
+     * report); otherwise only cash flows of bonds owned by the signed-in
+     * client leave the service. Enforced here so no endpoint can bypass it.
+     */
+    private Long clientIdOrNull() {
+        return currentUserService.isAdmin() ? null : currentUserService.requireClient().getId();
     }
 
     @Override
     public List<CashFlowDTO> getAllCashFlows() {
-        return cashFlowDataRepository.findAll().stream()
-                .map(this::toDTO)
-                .toList();
+        Long clientId = clientIdOrNull();
+        List<BondCashFlow> rows = clientId == null
+                ? cashFlowDataRepository.findAll()
+                : cashFlowDataRepository.findAllForClient(clientId);
+        return rows.stream().map(this::toDTO).toList();
     }
 
     @Override
     public List<CashFlowDTO> getByYear(int year) {
-        return cashFlowDataRepository.findByYear(year).stream()
-                .map(this::toDTO)
-                .toList();
+        Long clientId = clientIdOrNull();
+        List<BondCashFlow> rows = clientId == null
+                ? cashFlowDataRepository.findByYear(year)
+                : cashFlowDataRepository.findByYearForClient(clientId, year);
+        return rows.stream().map(this::toDTO).toList();
     }
 
     @Override
     public List<CashFlowDTO> getByDate(String date) {
         LocalDate localDate = dateUtils.parseToLocalDate(date);
-        return cashFlowDataRepository.findByDate(localDate).stream()
-                .map(this::toDTO)
-                .toList();
+        Long clientId = clientIdOrNull();
+        List<BondCashFlow> rows = clientId == null
+                ? cashFlowDataRepository.findByDate(localDate)
+                : cashFlowDataRepository.findByDateForClient(clientId, localDate);
+        return rows.stream().map(this::toDTO).toList();
     }
 
     @Override
     public List<CashFlowDTO> getByMonth(String monthStr) {
         LocalDate[] boundaries = dateUtils.convertMonthToBoundaries(monthStr);
-        return cashFlowDataRepository.findByDateRange(boundaries[0], boundaries[1]).stream()
-                .map(this::toDTO)
-                .toList();
+        Long clientId = clientIdOrNull();
+        List<BondCashFlow> rows = clientId == null
+                ? cashFlowDataRepository.findByDateRange(boundaries[0], boundaries[1])
+                : cashFlowDataRepository.findByDateRangeForClient(clientId,
+                        boundaries[0], boundaries[1]);
+        return rows.stream().map(this::toDTO).toList();
     }
 
     @Override
     public List<CashFlowDTO> getByBond(Long bondId) {
-        return cashFlowDataRepository.findByBondId(bondId).stream()
-                .map(this::toDTO)
-                .toList();
+        Long clientId = clientIdOrNull();
+        List<BondCashFlow> rows = clientId == null
+                ? cashFlowDataRepository.findByBondId(bondId)
+                : cashFlowDataRepository.findByBondForClient(clientId, bondId);
+        return rows.stream().map(this::toDTO).toList();
     }
 
     @Override
     public List<CashFlowDTO> getByDateRange(String startDate, String endDate) {
         LocalDate startDt = dateUtils.parseToLocalDate(startDate);
         LocalDate endDt = dateUtils.parseToLocalDate(endDate);
-        return cashFlowDataRepository.findByDateRange(startDt, endDt).stream()
-                .map(this::toDTO)
-                .toList();
+        Long clientId = clientIdOrNull();
+        List<BondCashFlow> rows = clientId == null
+                ? cashFlowDataRepository.findByDateRange(startDt, endDt)
+                : cashFlowDataRepository.findByDateRangeForClient(clientId, startDt, endDt);
+        return rows.stream().map(this::toDTO).toList();
     }
 
     private CashFlowDTO toDTO(BondCashFlow cf) {
@@ -78,6 +105,10 @@ public class CashFlowDataServiceImpl implements CashFlowDataService {
         if (cf.getBond() != null) {
             dto.setBondId(cf.getBond().getId());
             dto.setBondName(cf.getBond().getBondName());
+            dto.setIssuerId(cf.getBond().getIssuer()); // BONDBP B.2
+            if (cf.getBond().getClient() != null) {
+                dto.setClientName(cf.getBond().getClient().getName());
+            }
         }
         return dto;
     }

@@ -68,6 +68,22 @@ public class CurrentUserService {
                 client.getRole(), "ADMIN".equals(client.getRole()));
     }
 
+    /** True when the signed-in user holds any of the given roles (AUTH.md d). */
+    public boolean hasAnyRole(String... roles) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) {
+            return false;
+        }
+        for (String role : roles) {
+            boolean matched = auth.getAuthorities().stream()
+                    .anyMatch(a -> (AuthConstants.ROLE_PREFIX + role).equals(a.getAuthority()));
+            if (matched) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** ADMIN sees every client's investments; USER / SUPERVISOR see only their own. */
     public boolean isAdmin() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();

@@ -35,6 +35,11 @@ public class Bond {
         return client == null ? null : client.getPan();
     }
 
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    public String getClientName() {
+        return client == null ? null : client.getName();
+    }
+
     private String bondName;
     private String issuer;
     private String creditRating;

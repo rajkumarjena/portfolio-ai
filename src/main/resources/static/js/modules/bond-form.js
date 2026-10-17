@@ -4,6 +4,9 @@ function navigateAway(url) {
 
 const urlParams = new URLSearchParams(window.location.search);
 const bondId = urlParams.get('id');
+// BONDBP A.5: ?view=1 opens an existing bond read-only - every field, the
+// schedule and the save action are all disabled, nothing here edits data.
+const viewMode = urlParams.get('view') === '1' && !!bondId;
 
 const form = document.getElementById('bondForm');
 const investmentAmountInput = document.getElementById('investmentAmountPerUnit');
@@ -23,6 +26,18 @@ if (!bondId && investmentDateInput) {
 let formChanged = false;
 if (form) {
     form.addEventListener('input', () => { formChanged = true; });
+}
+
+// Put the whole screen into view-only mode: title, fields and save action.
+function applyViewMode() {
+    if (!viewMode) return;
+    const heading = document.querySelector('#content h1');
+    if (heading) heading.textContent = 'Bond Details (View Only)';
+    if (form) {
+        form.querySelectorAll('input, select, textarea').forEach(el => { el.disabled = true; });
+        const submit = form.querySelector('button[type=submit]');
+        if (submit) submit.style.display = 'none';
+    }
 }
 
 // Function to calculate the total based on Investment Amount and Units
@@ -66,6 +81,7 @@ if (bondId && form) {
 if (form) {
   form.addEventListener('submit', function(e) {
     e.preventDefault();
+    if (viewMode) return; // read-only screen - never persists
     const formData = new FormData(this);
     const bond = {};
     formData.forEach((value, key) => bond[key] = value);
@@ -186,8 +202,8 @@ if (maturityDateInput) {
 }
 
 function checkAndTrigger() {
-    // Stop recalculation tracking if working on an existing bond item context
-//    if (bondId) return;
+    // View-only mode never regenerates the loaded schedule
+    if (viewMode) return;
 
     if (!invStartDateInput || !maturityDateInput) {
         console.log("Inputs not found");
@@ -216,10 +232,10 @@ var renderTable = function() {
     if (!tbody) return;
     tbody.innerHTML = "";
 
-    // Add button above the table
+    // Add button above the table (never in view-only mode)
     const addBtnContainer = document.getElementById('addRecordContainer');
     if (addBtnContainer) {
-        addBtnContainer.innerHTML = `
+        addBtnContainer.innerHTML = viewMode ? '' : `
             <button type="button" onclick="addCustomRow()">Add Record</button>
         `;
     }
@@ -228,6 +244,10 @@ var renderTable = function() {
         const tr = document.createElement('tr');
         tr.dataset.index = index;
 
+        const actionCell = viewMode ? 'View'
+            : `<button type="button" class="edit-btn" onclick="toggleEditRow(this)">Edit</button>
+                <button type="button" class="delete-btn" onclick="deleteRow(${index})">Delete</button>`;
+
         tr.innerHTML = `
             <td>${row.year}</td>
             <td>${row.schedule}</td>
@@ -235,10 +255,7 @@ var renderTable = function() {
             <td>${row.payout}</td>
             <td>${row.amount}</td>
             <td>${row.valuePct}</td>
-            <td>
-                <button type="button" class="edit-btn" onclick="toggleEditRow(this)">Edit</button>
-                <button type="button" class="delete-btn" onclick="deleteRow(${index})">Delete</button>
-            </td>
+            <td>${actionCell}</td>
         `;
         tbody.appendChild(tr);
     });
@@ -368,6 +385,7 @@ async function loadCreditRating() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  applyViewMode();
   loadIssuers();
   loadCouponFrequency();
   loadCreditRating();

@@ -17,4 +17,9 @@ public class CashFlowDTO {
     private int year;
     private Long bondId;
     private String bondName;
+    // BONDBP B.1/B.2: issuer id carried to the report; the page maps it to the
+    // issuer name through the cached application param list - no DB lookup.
+    private String issuerId;
+    // BONDBP_V1: client name for distinguishing whose bonds (esp. for ADMIN/SUPERVISOR)
+    private String clientName;
 }

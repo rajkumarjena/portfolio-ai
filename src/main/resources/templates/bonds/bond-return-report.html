@@ -22,6 +22,25 @@
         <input type="date" id="filterStart" style="display:none;">
         <input type="date" id="filterEnd" style="display:none;">
 
+        <!-- BONDBP B.2: bond ref and issuer criteria, combined AND with the
+             date criteria above -->
+        <label for="filterBond">Bond Ref:</label>
+        <select id="filterBond">
+            <option value="">All Bonds</option>
+        </select>
+        <label for="filterIssuer">Issuer:</label>
+        <select id="filterIssuer">
+            <option value="">All Issuers</option>
+        </select>
+
+        <!-- BONDBP_V1: multi-select client filter for ADMIN/SUPERVISOR -->
+        <span id="clientFilterWrapper" style="display:none;">
+            <label for="filterClients">Client:</label>
+            <select id="filterClients" multiple size="3">
+                <option value="__ALL__" selected>All Clients</option>
+            </select>
+        </span>
+
         <button class="primary" onclick="applyFilter()"><i data-lucide="filter"></i>Apply Filter</button>
     </div>
 
@@ -36,6 +55,8 @@
             <th>Redemption</th>
             <th>Year</th>
             <th>Bond Ref</th>
+            <th>Issuer</th>
+            <th>Client</th>
         </tr>
         </thead>
         <tbody>

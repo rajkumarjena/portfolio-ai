@@ -8,6 +8,7 @@ import com.artech.portfolio.common.entity.AppParamConfig;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
@@ -77,6 +78,13 @@ public class BondController {
                         .equalsIgnoreCase(BondConstants.BOND) && x.getParamName()
                         .equalsIgnoreCase(BondConstants.CREDIT_RATING))
                 .toList();
+    }
+
+    /** Role-ladder refusals (BONDBP A.5 / A.6) surface as a clean 403 first. */
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<Map<String, String>> handleStatus(ResponseStatusException ex) {
+        return ResponseEntity.status(ex.getStatusCode())
+                .body(Map.of("message", ex.getReason() == null ? ex.getMessage() : ex.getReason()));
     }
 
     /** Validation / not-found errors surface as a clean 400/404, never a 500. */
