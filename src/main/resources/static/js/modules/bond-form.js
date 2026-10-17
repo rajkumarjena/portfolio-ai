@@ -323,6 +323,28 @@ async function loadIssuers() {
   }
 }
 
+async function loadCouponFrequency() {
+  try {
+    const response = await fetch("/api/bonds/coupon-frequency"); // call your API
+    if (!response.ok) {
+      throw new Error("Failed to fetch coupon frequency");
+    }
+    const issuers = await response.json();
+
+    const select = document.getElementById("couponFrequencySelect");
+    select.innerHTML = ""; // clear existing options
+
+    issuers.forEach(issuer => {
+      const option = document.createElement("option");
+      option.value = issuer.id;        // backend ID
+      option.textContent = issuer.paramValue; // display name
+      select.appendChild(option);
+    });
+  } catch (error) {
+    console.error("Error loading coupon frequency:", error);
+  }
+}
+
 async function loadCreditRating() {
   try {
     const response = await fetch("/api/bonds/credit/rating"); // call your API
@@ -347,6 +369,7 @@ async function loadCreditRating() {
 
 document.addEventListener("DOMContentLoaded", () => {
   loadIssuers();
+  loadCouponFrequency();
   loadCreditRating();
   renderTable();
   checkAndTrigger();

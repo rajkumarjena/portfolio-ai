@@ -61,6 +61,14 @@ public class BondController {
                         && x.getParamName().equalsIgnoreCase(BondConstants.ISSUER)).toList();
     }
 
+    @GetMapping("/coupon-frequency")
+    public List<AppParamConfig> getBondCouponFrequency() {
+
+        return appParamController.getConfig().stream().filter(x ->
+                x.getInvestmentType().equalsIgnoreCase(BondConstants.BOND)
+                        && x.getParamName().trim().equalsIgnoreCase(BondConstants.COUPON_FREQUENCY)).toList();
+    }
+
     @GetMapping("/credit/rating")
     public List<AppParamConfig> getBondCreditRating() {
 
