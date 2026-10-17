@@ -108,6 +108,7 @@ public class CashFlowDataServiceImpl implements CashFlowDataService {
             dto.setIssuerId(cf.getBond().getIssuer()); // BONDBP B.2
             if (cf.getBond().getClient() != null) {
                 dto.setClientName(cf.getBond().getClient().getName());
+                dto.setClientPan(cf.getBond().getClient().getPan());
             }
         }
         return dto;

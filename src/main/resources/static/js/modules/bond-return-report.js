@@ -24,6 +24,13 @@
     return issuerNames.get(String(row.issuerId)) || String(row.issuerId);
   }
 
+  function clientDisplay(row) {
+    if (row.clientName && row.clientPan) return row.clientName + ' [' + row.clientPan + ']';
+    if (row.clientName) return row.clientName;
+    if (row.clientPan) return row.clientPan;
+    return '-';
+  }
+
   function renderTable(rows) {
     const tbody = document.querySelector('#reportTable tbody');
     let totalInterest = 0, totalRedemption = 0, totalCredit = 0;
@@ -41,7 +48,7 @@
         <td>${row.year}</td>
         <td class="left">${esc(row.bondName)}</td>
         <td class="left">${esc(issuerOf(row))}</td>
-        <td class="left">${esc(row.clientName || '-')}</td>
+        <td class="left">${esc(clientDisplay(row))}</td>
       </tr>`;
     }).join('');
 
@@ -77,11 +84,11 @@
     if (bondId) rows = rows.filter(r => String(r.bondId) === bondId);
     if (issuerId) rows = rows.filter(r => String(r.issuerId) === issuerId);
 
-    // BONDBP_V1: filter by selected clients (ADMIN/SUPERVISOR)
+    // BONDBP_V1/V2: filter by selected clients (ADMIN/SUPERVISOR)
     if (clientSelect && clientSelect.options.length > 0) {
       const selected = Array.from(clientSelect.selectedOptions).map(o => o.value);
       if (selected.length > 0 && !selected.includes('__ALL__')) {
-        rows = rows.filter(r => selected.includes(r.clientName || '-'));
+        rows = rows.filter(r => selected.includes(clientDisplay(r)));
       }
     }
 
@@ -122,12 +129,12 @@
     if (!wrapper || !select) return;
     const seen = new Set();
     (allRows || []).forEach(r => {
-      const name = r.clientName || '-';
-      if (!seen.has(name)) {
-        seen.add(name);
+      const disp = clientDisplay(r);
+      if (!seen.has(disp)) {
+        seen.add(disp);
         const opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = name;
+        opt.value = disp;
+        opt.textContent = disp;
         select.appendChild(opt);
       }
     });

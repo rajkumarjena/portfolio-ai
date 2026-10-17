@@ -5,9 +5,18 @@
 <main id="content" th:fragment="content" class="content">
     <h1>Bond Records</h1>
 
-    <div class="nav-buttons">
-        <a class="btn" href="/index.html"><i data-lucide="house"></i>Home</a>
-        <a class="btn primary" href="/bonds/bond-form.html"><i data-lucide="circle-plus"></i>Add Bond</a>
+    <div class="nav-buttons" style="justify-content: space-between; align-items: center;">
+        <div>
+            <a class="btn" href="/index.html"><i data-lucide="house"></i>Home</a>
+            <a class="btn primary" href="/bonds/bond-form.html"><i data-lucide="circle-plus"></i>Add Bond</a>
+        </div>
+        <div id="viewClientFilterWrapper" style="display:none;">
+            <label for="viewFilterClients">Client:</label>
+            <select id="viewFilterClients" multiple size="2">
+                <option value="__ALL__" selected>All Clients</option>
+            </select>
+            <button class="btn" onclick="applyViewClientFilter()"><i data-lucide="filter"></i>Filter</button>
+        </div>
     </div>
 
     <h2>Active Bonds</h2>
