@@ -42,7 +42,7 @@ pf:
     dateInput: yyyy-MM-dd
 app:
   config:
-    refreshRateDuration: PT24S
+    refreshRateDuration: PT15M
   # Base URL used in password-reset emails (AUTH.md h)
   base-url: http://localhost:8081
   mail:
@@ -55,3 +55,6 @@ app:
 # SPRING_MAIL_HOST=smtp.gmail.com;
 # SPRING_MAIL_USERNAME=rajkiit2005@gmail.com;
 # SPRING_MAIL_PASSWORD=cmztnlfixqzivbdf
+# export SPRING_MAIL_HOST=smtp.gmail.com
+#export SPRING_MAIL_USERNAME=rajkiit2005@gmail.com
+#export SPRING_MAIL_PASSWORD=cmztnlfixqzivbdf
