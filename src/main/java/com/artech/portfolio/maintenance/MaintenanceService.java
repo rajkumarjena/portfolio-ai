@@ -1,5 +1,12 @@
 package com.artech.portfolio.maintenance;
 
+import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.Appender;
+import ch.qos.logback.core.FileAppender;
+import ch.qos.logback.core.rolling.RollingFileAppender;
+import ch.qos.logback.core.rolling.RollingPolicy;
+import ch.qos.logback.core.rolling.TriggeringPolicy;
 import com.artech.portfolio.auth.service.AuthException;
 import com.zaxxer.hikari.HikariDataSource;
 import com.zaxxer.hikari.HikariPoolMXBean;
@@ -11,9 +18,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.sql.DataSource;
+import java.io.FileDescriptor;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -25,6 +35,9 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -534,14 +547,159 @@ public class MaintenanceService {
         return logFile;
     }
 
-    /** BACKUP.md 10: zero the server log after it has been downloaded. */
-    public void truncateLog() {
-        try (java.nio.channels.FileChannel ch = java.nio.channels.FileChannel.open(
-                logFile, java.nio.file.StandardOpenOption.WRITE)) {
-            ch.truncate(0);
-            log.info("Application log downloaded and cleared - {} is now 0 bytes", logFile);
+    /**
+     * BACKUP.md 10: zero the server log after it has been downloaded.
+     *
+     * A bare "truncate to 0" is not enough - two open-handle traps make the
+     * file come back as a sparse file with a run of null bytes (server
+     * observation: 14,038 bytes apparent / 4.0K on disk, "0 bytes" never
+     * reached):
+     *
+     *  1. The confirmation line: logging it AFTER the truncate puts a line
+     *     straight back into the file, so it is logged first and wiped with
+     *     everything else.
+     *  2. Stale offsets: the server runs the app with its console output
+     *     redirected into the very same springboot.log
+     *     (java -jar app.jar > springboot.log 2>&1). That descriptor keeps
+     *     the offset it had BEFORE the truncate, so the next console line is
+     *     written past the new end of the file - a hole of null bytes opens
+     *     up in front and the file can never read as 0 again. Logback's own
+     *     file handle gets the same treatment if logging.file.append=false.
+     *
+     * So: say it, close logback's file appender (flush + fresh offset on
+     * reopen), rewind the stdout descriptor, truncate, rewind once more and
+     * verify - retrying if a concurrent line raced the truncate.
+     */
+    public synchronized void truncateLog() {
+        // (1) announce BEFORE zeroing - this line is wiped with the rest
+        log.info("Application log downloaded and cleared - {} is now 0 bytes", logFile);
+
+        // (2) close + flush logback's handle(s) writing into this file
+        Set<FileAppender<?>> stopped = stopFileAppenders();
+
+        try {
+            for (int attempt = 1; attempt <= 3; attempt++) {
+                // (3) console descriptor back to offset 0 before truncating
+                rewindStdout();
+                try (FileChannel channel = FileChannel.open(logFile, StandardOpenOption.WRITE)) {
+                    channel.truncate(0);
+                }
+                // (4) a line written mid-truncate must also start at byte 0
+                rewindStdout();
+                if (Files.size(logFile) == 0) {
+                    return; // BACKUP.md 10 - genuinely zero bytes
+                }
+            }
+            log.warn("Application log was cleared but {} bytes remain in {}",
+                    Files.size(logFile), logFile);
         } catch (IOException e) {
-            log.warn("Log was downloaded but could not be cleared: {}", e.getMessage());
+            log.warn("Application log was downloaded but could not be cleared: {}",
+                    e.getMessage());
+        } finally {
+            rewindStdout();
+            stopped.forEach(MaintenanceService::startFileAppender);
+        }
+    }
+
+    /**
+     * Starts a stopped file appender again.
+     *
+     * RollingFileAppender.stop() also stops its rolling + triggering policy,
+     * and start() refuses to run while the triggering policy is stopped
+     * ("TriggeringPolicy has not started. RollingFileAppender will not
+     * start") - which would silently kill all further logging. The policies
+     * must therefore be started first; both are LifeCycle children of the
+     * appender, so this is logback's own restart order.
+     */
+    private static void startFileAppender(FileAppender<?> appender) {
+        if (appender instanceof RollingFileAppender<?> rolling) {
+            RollingPolicy rollingPolicy = rolling.getRollingPolicy();
+            TriggeringPolicy<?> triggeringPolicy = rolling.getTriggeringPolicy();
+            if (rollingPolicy != null && !rollingPolicy.isStarted()) {
+                rollingPolicy.start();
+            }
+            if (triggeringPolicy != null && !triggeringPolicy.isStarted()) {
+                triggeringPolicy.start();
+            }
+        }
+        appender.start();
+    }
+
+    /**
+     * logback appenders that write into the log file - closed here so the
+     * truncate can neither race buffered bytes nor leave logback writing at
+     * the old end-of-file offset (relevant when logging.file.append=false).
+     */
+    private Set<FileAppender<?>> stopFileAppenders() {
+        Set<FileAppender<?>> stopped = new LinkedHashSet<>();
+        String target = logFile.toAbsolutePath().normalize().toString();
+        LoggerContext context = (LoggerContext) LoggerFactory.getILoggerFactory();
+        for (ch.qos.logback.classic.Logger logger : context.getLoggerList()) {
+            for (Iterator<Appender<ILoggingEvent>> it = logger.iteratorForAppenders(); it.hasNext(); ) {
+                Appender<ILoggingEvent> appender = it.next();
+                if (appender instanceof FileAppender<?> fileAppender
+                        && fileAppender.getFile() != null
+                        && Path.of(fileAppender.getFile()).toAbsolutePath().normalize()
+                                .toString().equalsIgnoreCase(target)) {
+                    fileAppender.stop();
+                    stopped.add(fileAppender);
+                }
+            }
+        }
+        return stopped;
+    }
+
+    /**
+     * Rewinds the process stdout to offset 0 (best effort).
+     *
+     * With `java -jar app.jar > springboot.log 2>&1` the console appender
+     * writes through that descriptor into the file being cleared; it holds
+     * the pre-truncate offset until something seeks it back, which is exactly
+     * what produced the null-byte hole. stderr shares the same descriptor
+     * under 2>&1, so one rewind covers both.
+     */
+    private void rewindStdout() {
+        if (!stdoutWritesIntoLogFile()) {
+            return;
+        }
+        try {
+            FileChannel stdout = StdoutChannel.CHANNEL;
+            if (stdout != null) {
+                stdout.position(0);
+            }
+        } catch (IOException | RuntimeException e) {
+            // stdout is a terminal or pipe (seek fails) - nothing to rewind
+        }
+    }
+
+    /** True when the process stdout was redirected into the log file itself. */
+    private boolean stdoutWritesIntoLogFile() {
+        try {
+            Path fd1 = Path.of("/proc/self/fd/1"); // Linux servers: exact answer
+            if (Files.exists(fd1)) {
+                return Files.readSymbolicLink(fd1).toAbsolutePath().normalize()
+                        .toString()
+                        .equalsIgnoreCase(logFile.toAbsolutePath().normalize().toString());
+            }
+        } catch (IOException | RuntimeException ignored) {
+            // not Linux / unreadable - fall through
+        }
+        // Cannot tell (Windows/macOS dev machines): assume a file redirect; the
+        // seek below simply fails on terminals and pipes, so guessing is safe.
+        return true;
+    }
+
+    /** The process stdout, opened once and kept for the JVM's lifetime. */
+    private static final class StdoutChannel {
+        /** Never closed on purpose - closing it would close fd 1 (System.out). */
+        private static final FileChannel CHANNEL = open();
+
+        private static FileChannel open() {
+            try {
+                return new FileOutputStream(FileDescriptor.out).getChannel();
+            } catch (RuntimeException e) {
+                return null;
+            }
         }
     }
 

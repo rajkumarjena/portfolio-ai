@@ -1,5 +1,10 @@
 server:
-  port: 8082
+  port: 8081
+  ssl:
+    key-store: "file:keystore.p12"
+    key-store-type: "PKCS12"
+    key-store-password: "portfolio"
+    key-alias: "springboot"
 spring:
   application:
     name: portfolio
