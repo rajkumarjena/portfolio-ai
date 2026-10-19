@@ -20,6 +20,46 @@
         });
     }
 
+    // BACKUP.md 4/5: the site-wide maintenance warning. Every page (signed-in
+    // and signed-out screens alike) polls the public status endpoint, so the
+    // banner appears the moment an admin starts a backup/refresh and vanishes
+    // by itself when the process is over.
+    var maintenanceTimer = null;
+
+    function applyMaintenance(state) {
+        var banner = document.getElementById('maintBanner');
+        if (!banner) return;
+        var visible = !!(state && state.active);
+        banner.classList.toggle('visible', visible);
+        var text = document.getElementById('maintBannerText');
+        if (text && state && state.message) {
+            text.textContent = state.message;
+        }
+        // Keep the sticky topbar/sidebar below the banner while it shows.
+        document.documentElement.style.setProperty('--maint-banner-h',
+            visible ? (banner.offsetHeight || 0) + 'px' : '0px');
+    }
+
+    function pollMaintenance() {
+        return fetch('/api/maintenance/status', { cache: 'no-store' })
+            .then(function (res) { return res.ok ? res.json() : null; })
+            .then(function (state) { if (state) applyMaintenance(state); return state; })
+            .catch(function () { /* transient failure - keep the last state */ return null; });
+    }
+
+    function startMaintenancePolling() {
+        if (maintenanceTimer) return;
+        pollMaintenance();
+        maintenanceTimer = setInterval(pollMaintenance, 3000);
+        window.addEventListener('resize', function () {
+            var banner = document.getElementById('maintBanner');
+            if (banner && banner.classList.contains('visible')) {
+                document.documentElement.style.setProperty('--maint-banner-h',
+                    (banner.offsetHeight || 0) + 'px');
+            }
+        });
+    }
+
     async function logout() {
         try {
             await fetch('/logout', { method: 'POST' });
@@ -45,11 +85,14 @@
 
         markActiveLink();
         renderIcons();
+        startMaintenancePolling();
     });
 
     // Expose for inline handlers in the layout / templates.
     window.App = {
         logout: logout,
-        renderIcons: renderIcons
+        renderIcons: renderIcons,
+        pollMaintenance: pollMaintenance,
+        applyMaintenance: applyMaintenance
     };
 })();

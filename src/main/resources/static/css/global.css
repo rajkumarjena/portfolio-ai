@@ -151,7 +151,16 @@ a  { color: var(--color-primary); }
     z-index: 10;
 }
 
-.topbar-title { flex: 1; font-weight: 600; }
+/* Title shrinks with an ellipsis on narrow screens instead of wrapping
+   into several lines (responsive topbar). */
+.topbar-title {
+    flex: 1;
+    min-width: 0;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 
 .menu-toggle {
     display: none;

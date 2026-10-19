@@ -27,6 +27,15 @@
 </head>
 
 <body>
+<!-- BACKUP.md 4/5: running warning for a database backup/refresh. Server-rendered
+     with the current state, then kept up to date by the status poll in app.js -
+     it disappears by itself when the process finishes. -->
+<div class="maint-banner" id="maintBanner" role="alert"
+     th:classappend="${maintenance != null and maintenance.active} ? ' visible'">
+    <span class="maint-banner-track" id="maintBannerText"
+          th:text="${maintenance != null and maintenance.active ? maintenance.message : 'Database maintenance is in progress'}">Database maintenance is in progress</span>
+</div>
+
 <div class="app">
     <!-- ============================================================ sidebar -->
     <aside class="sidebar" id="sidebar">
@@ -56,6 +65,8 @@
             <a th:href="@{/app-param-config.html}" class="nav-link"><i data-lucide="sliders-horizontal"></i>App Parameters</a>
             <a th:href="@{/admin-users.html}" class="nav-link" th:if="${currentUser != null and currentUser.admin}">
                 <i data-lucide="shield-check"></i>Manage Users</a>
+            <a th:href="@{/admin-db-backup.html}" class="nav-link" th:if="${currentUser != null and currentUser.admin}">
+                <i data-lucide="database-backup"></i>Database Backup</a>
         </nav>
     </aside>
 

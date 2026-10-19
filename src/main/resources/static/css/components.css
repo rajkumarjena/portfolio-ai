@@ -416,3 +416,56 @@ ul.plain-list { margin: var(--space-2) 0 0; padding-left: var(--space-5); font-s
   .table-container { overflow-x: auto; }
   .form-right { overflow-x: hidden; }
 }
+
+/* ------------------------------------------------------- BACKUP.md 4/5 --- */
+/* Running warning shown at the very top of every page (signed-in and
+   signed-out) while a database backup/refresh is on. It scrolls like a live
+   ticker and hides itself again as soon as the process finishes - the state
+   comes from /api/maintenance/status, polled by app.js. */
+.maint-banner {
+    display: none;
+    position: sticky;
+    top: 0;
+    z-index: 60;
+    background: var(--color-fail);
+    color: #fff;
+    padding: var(--space-2) 0;
+    overflow: hidden;
+    box-shadow: 0 2px 6px rgba(20, 32, 48, 0.25);
+}
+
+.maint-banner.visible { display: block; }
+
+.maint-banner-track {
+    display: inline-block;
+    white-space: nowrap;
+    padding-left: 100%;
+    font-weight: 700;
+    font-size: var(--fs-body);
+    animation: maint-marquee 16s linear infinite;
+}
+
+@keyframes maint-marquee {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-100%); }
+}
+
+/* While the banner is up, the sticky shell elements sit below it. */
+.topbar { top: var(--maint-banner-h, 0px); }
+.sidebar {
+    top: var(--maint-banner-h, 0px);
+    height: calc(100vh - var(--maint-banner-h, 0px));
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .maint-banner-track {
+        animation: none;
+        padding-left: 0;
+        white-space: normal;
+    }
+}
+
+/* Admin Database Backup and Refresh page (BACKUP.md 1): action cards. */
+.backup-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-3); }
+.backup-actions input[type="file"] { max-width: 100%; }
+#liveStatus:empty { display: none; }

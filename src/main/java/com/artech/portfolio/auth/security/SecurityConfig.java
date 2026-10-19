@@ -45,13 +45,16 @@ public class SecurityConfig {
                 .requestMatchers("/login.html", "/register.html", "/forgot-password.html",
                         "/reset-password.html", "/error",
                         "/api/auth/register", "/api/auth/forgot-password", "/api/auth/reset-password",
-                        "/api/auth/validate-token", "/api/auth/csrf").permitAll()
+                        "/api/auth/validate-token", "/api/auth/csrf",
+                        // BACKUP.md 4: every visitor polls the warning-banner state
+                        "/api/maintenance/status").permitAll()
                 // Public static assets (no data in them): root + one-level subfolders (bonds/, fds/, js/, assets/)
                 .requestMatchers("/*.js", "/*.css", "/*.svg", "/*.png", "/*.ico",
                         "/*/*.js", "/*/*.css", "/*/*.svg", "/*/*.png",
                         "/js/**", "/css/**", "/assets/**").permitAll()
                 // --- admin business process (AUTH.md e) ---
-                .requestMatchers("/admin-users.html", "/api/admin/**").hasRole("ADMIN")
+                .requestMatchers("/admin-users.html", "/admin-db-backup.html",
+                        "/api/admin/**").hasRole("ADMIN")
                 // --- everything else: any authenticated user (USER, SUPERVISOR or ADMIN) ---
                 .anyRequest().authenticated())
             // AUTH.md (a): form login on our own static page

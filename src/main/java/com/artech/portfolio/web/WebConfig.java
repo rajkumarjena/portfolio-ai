@@ -38,6 +38,7 @@ public class WebConfig implements WebMvcConfigurer {
         registry.addViewController("/reset-password.html").setViewName("reset-password");
 
         registry.addViewController("/admin-users.html").setViewName("admin-users");
+        registry.addViewController("/admin-db-backup.html").setViewName("admin-db-backup");
 
         registry.addViewController("/app-client-config.html").setViewName("app-client-config");
         registry.addViewController("/app-client-view.html").setViewName("app-client-view");

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: page('Database Backup and Refresh', ~{:: #content}, ~{:: #scripts})}">
+<body>
+<main id="content" th:fragment="content" class="content">
+    <h1>Database Backup and Refresh</h1>
+
+    <div class="note"><strong>Admin only.</strong> Starting a backup or a refresh briefly
+        pauses the whole application (BACKUP.md): every user &mdash; signed in or not &mdash;
+        sees a red warning banner across the top of their page, new requests are held for a
+        few seconds so pending work can finish, the process runs, then the banner disappears
+        by itself.</div>
+
+    <div id="feedback"></div>
+    <div class="hint" id="liveStatus"></div>
+
+    <div class="dash-grid">
+        <div class="dash-card">
+            <h2><i data-lucide="database-backup"></i>Database Backup</h2>
+            <p>Creates a consistent snapshot of the live server database
+                <strong>portfolio.db</strong> and downloads it to this computer.</p>
+            <div class="backup-actions">
+                <button class="primary" id="btnBackup" type="button">
+                    <i data-lucide="download"></i>Download Database Backup</button>
+            </div>
+            <p class="muted" style="margin-top:12px;">File: <span id="backupFileName">portfolio.db</span>
+                &rarr; saved as <code>portfolio-backup-&lt;date&gt;.db</code></p>
+        </div>
+
+        <div class="dash-card">
+            <h2><i data-lucide="database-zap"></i>Database Refresh</h2>
+            <p>Replaces the server's database with a <strong>portfolio.db</strong> file from
+                this computer. All current server data becomes the data of the uploaded file;
+                the previous file is kept on the server as <code>portfolio.db.before-refresh</code>.</p>
+            <div class="backup-actions">
+                <input type="file" id="refreshFile" accept=".db,application/octet-stream">
+                <button class="danger" id="btnRefresh" type="button">
+                    <i data-lucide="upload"></i>Upload &amp; Replace Database</button>
+            </div>
+        </div>
+
+        <div class="dash-card">
+            <h2><i data-lucide="file-text"></i>Application Log</h2>
+            <p>Downloads the server's application log (<strong>springboot.log</strong>) and
+                clears it on the server afterwards (back to 0 bytes). No warning banner is
+                shown for this process.</p>
+            <div class="backup-actions">
+                <button class="secondary" id="btnLog" type="button">
+                    <i data-lucide="file-down"></i>Download Application Log</button>
+            </div>
+        </div>
+    </div>
+</main>
+
+<th:block id="scripts" th:fragment="scripts">
+    <script th:src="@{/js/modules/admin-db-backup.js}"></script>
+</th:block>
+</body>
+</html>

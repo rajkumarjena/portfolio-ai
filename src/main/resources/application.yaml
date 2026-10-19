@@ -1,13 +1,14 @@
 server:
-  port: 8081
+  port: 8082
 spring:
   application:
     name: portfolio
   # CAS statements (xlsx/pdf) can be large - raise the default 1MB cap (MF.md 14)
   servlet:
     multipart:
-      max-file-size: 25MB
-      max-request-size: 30MB
+      # raised for BACKUP.md 7: portfolio.db uploads replace the server file
+      max-file-size: 200MB
+      max-request-size: 210MB
   datasource:
     url: jdbc:sqlite:${user.home}/portfolio.db
     driver-class-name: org.sqlite.JDBC
@@ -31,6 +32,12 @@ spring:
           extra_physical_table_types: TABLE
     generate-ddl: true
 
+# BACKUP.md 9/10: the one application log file, in user.home - the admin
+# page downloads it and clears it back to zero bytes.
+logging:
+  file:
+    name: ${user.home}/springboot.log
+
 # Centralized date configuration
 bond:
   dateFormat:
@@ -43,6 +50,9 @@ pf:
 app:
   config:
     refreshRateDuration: PT15M
+  # BACKUP.md 3: pause before backup/refresh so in-flight requests can finish
+  maintenance:
+    drain-ms: 8000
   # Base URL used in password-reset emails (AUTH.md h)
   base-url: http://localhost:8081
   mail:
