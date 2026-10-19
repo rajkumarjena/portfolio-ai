@@ -10,47 +10,64 @@ import java.util.List;
 
 public interface CashFlowDataRepository extends JpaRepository<BondCashFlow, Long> {
 
+    // ---------------------------------------------------------------------
+    // BONDBP_V4 #1: the Bond Returns Report always displays records ordered
+    // by Payment Date ascending (default display pattern). The ordering lives
+    // here, in SQL, so every /api/cashflows endpoint returns it - the UI just
+    // renders whatever the server sends (BONDBP_V4 #5: logic on server side),
+    // and the report's in-memory filters preserve the server order.
+    // id breaks same-day ties deterministically.
+
     // Query by bond id
-    @Query("SELECT c FROM BondCashFlow c JOIN FETCH c.bond b JOIN FETCH b.client WHERE b.id = :bondId")
+    @Query("SELECT c FROM BondCashFlow c JOIN FETCH c.bond b JOIN FETCH b.client WHERE b.id = :bondId"
+            + " ORDER BY c.date ASC, c.id ASC")
     List<BondCashFlow> findByBondId(Long bondId);
 
     // Query by year
-    @Query("SELECT c FROM BondCashFlow c JOIN FETCH c.bond b JOIN FETCH b.client WHERE c.year = :year")
+    @Query("SELECT c FROM BondCashFlow c JOIN FETCH c.bond b JOIN FETCH b.client WHERE c.year = :year"
+            + " ORDER BY c.date ASC, c.id ASC")
     List<BondCashFlow> findByYear(int year);
 
     // Query by exact date
-    @Query("SELECT c FROM BondCashFlow c JOIN FETCH c.bond b JOIN FETCH b.client WHERE c.date = :date")
+    @Query("SELECT c FROM BondCashFlow c JOIN FETCH c.bond b JOIN FETCH b.client WHERE c.date = :date"
+            + " ORDER BY c.date ASC, c.id ASC")
     List<BondCashFlow> findByDate(LocalDate date);
 
     // Custom query for date range
-    @Query("SELECT c FROM BondCashFlow c JOIN FETCH c.bond b JOIN FETCH b.client WHERE c.date BETWEEN :startDate AND :endDate")
+    @Query("SELECT c FROM BondCashFlow c JOIN FETCH c.bond b JOIN FETCH b.client WHERE c.date BETWEEN :startDate AND :endDate"
+            + " ORDER BY c.date ASC, c.id ASC")
     List<BondCashFlow> findByDateRange(LocalDate startDate, LocalDate endDate);
 
     // ---------------------------------------------------------------------
     // BONDBP B.3: per-user scoping. A non-admin only ever reads cash flows of
     // bonds they own; ADMIN uses the unscoped finders above. One join, done
     // in SQL - no lazy-loading N+1 per row.
-    @Query("SELECT c FROM BondCashFlow c JOIN FETCH c.bond b JOIN FETCH b.client WHERE b.client.id = :clientId")
+    @Query("SELECT c FROM BondCashFlow c JOIN FETCH c.bond b JOIN FETCH b.client WHERE b.client.id = :clientId"
+            + " ORDER BY c.date ASC, c.id ASC")
     List<BondCashFlow> findAllForClient(@Param("clientId") Long clientId);
 
     @Query("SELECT c FROM BondCashFlow c JOIN FETCH c.bond b JOIN FETCH b.client "
-            + "WHERE b.client.id = :clientId AND c.year = :year")
+            + "WHERE b.client.id = :clientId AND c.year = :year"
+            + " ORDER BY c.date ASC, c.id ASC")
     List<BondCashFlow> findByYearForClient(@Param("clientId") Long clientId,
                                            @Param("year") int year);
 
     @Query("SELECT c FROM BondCashFlow c JOIN FETCH c.bond b JOIN FETCH b.client "
-            + "WHERE b.client.id = :clientId AND c.date = :date")
+            + "WHERE b.client.id = :clientId AND c.date = :date"
+            + " ORDER BY c.date ASC, c.id ASC")
     List<BondCashFlow> findByDateForClient(@Param("clientId") Long clientId,
                                            @Param("date") LocalDate date);
 
     @Query("SELECT c FROM BondCashFlow c JOIN FETCH c.bond b JOIN FETCH b.client WHERE b.client.id = :clientId "
-            + "AND c.date BETWEEN :startDate AND :endDate")
+            + "AND c.date BETWEEN :startDate AND :endDate"
+            + " ORDER BY c.date ASC, c.id ASC")
     List<BondCashFlow> findByDateRangeForClient(@Param("clientId") Long clientId,
                                                 @Param("startDate") LocalDate startDate,
                                                 @Param("endDate") LocalDate endDate);
 
     @Query("SELECT c FROM BondCashFlow c JOIN FETCH c.bond b JOIN FETCH b.client "
-            + "WHERE b.client.id = :clientId AND b.id = :bondId")
+            + "WHERE b.client.id = :clientId AND b.id = :bondId"
+            + " ORDER BY c.date ASC, c.id ASC")
     List<BondCashFlow> findByBondForClient(@Param("clientId") Long clientId,
                                            @Param("bondId") Long bondId);
 }

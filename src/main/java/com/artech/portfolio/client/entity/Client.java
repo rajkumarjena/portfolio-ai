@@ -65,6 +65,12 @@ public class Client {
     @JsonManagedReference
     private List<ClientBankAccount> bankAccounts = new ArrayList<>();
 
+    // BONDBP_V5 #4: a client can have one or many family members - each an
+    // association with ANOTHER existing registered client (ClientFamilyMember)
+    @OneToMany(mappedBy = "client", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonManagedReference
+    private List<ClientFamilyMember> familyMembers = new ArrayList<>();
+
     /** Helper utilities to safely attach children while maintaining the bidirectional link */
     public void addMobile(ClientMobile mobile) {
         mobileNumbers.add(mobile);
@@ -79,5 +85,11 @@ public class Client {
     public void addBankAccount(ClientBankAccount bankAccount) {
         bankAccounts.add(bankAccount);
         bankAccount.setClient(this);
+    }
+
+    /** Helper to safely attach a family member association while maintaining the bidirectional link */
+    public void addFamilyMember(ClientFamilyMember member) {
+        familyMembers.add(member);
+        member.setClient(this);
     }
 }

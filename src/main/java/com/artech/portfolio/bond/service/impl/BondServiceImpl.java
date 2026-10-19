@@ -10,6 +10,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
@@ -86,11 +87,17 @@ public class BondServiceImpl implements BondService {
     public List<Bond> getAllBonds() {
         // ADMIN sees the whole book for dashboard reporting; everyone else only
         // their own rows (CONSISTENCY.md 6).
-        if (currentUserService.isAdmin()) {
-            return bondRepository.findAll();
-        }
-        Client me = currentUserService.requireClient();
-        return bondRepository.findByClientId(me.getId());
+        List<Bond> bonds = currentUserService.isAdmin()
+                ? bondRepository.findAll()
+                : bondRepository.findByClientId(currentUserService.requireClient().getId());
+        // BONDBP_V4 #2: the Bond Records screen is ordered by Maturity Date by
+        // default. Sorted here on the server so any future front-end (Angular /
+        // React / mobile - BONDBP_V4 #5) inherits the same default behaviour.
+        return bonds.stream()
+                .sorted(Comparator
+                        .comparing(Bond::getMaturityDate, Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(Bond::getId, Comparator.nullsLast(Comparator.naturalOrder())))
+                .toList();
     }
 
     @Override
