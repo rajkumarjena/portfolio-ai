@@ -1,9 +1,0 @@
-BOND SIP
-=======
-1. Create a screen for Bond SIP, it will have below attributes. Issuer, Create Date, SIP Date, SIP Amount, Actual SIP Amount, Bond Name, Status
-2. While creating bond, mandatory attribute is Issuer, Create Date (auto populate to current date, and disabled), SIP Date, SIP Amount
-3. SIP status is disabled field all the time. During bond sip create, status would be 'CREATED'
-4. Bond SIP should be executed automatically and status should be 'INPROGRESS' on SIP date if the day between Monday to Friday else status should be changed to 'INPROGRESS' on next weekday SIP date falls on weekend. A new record should be created as Bond SIP transaction details with status 'INPROGRES' in bond sip transaction table.
-5. Create Bond SIP Transaction view page where user wont be allowed to change Issuer, Create Date , SIP Date, SIP Amount, but he will be allowed to enter Actual SIP amount.
-6. In Bond SIP Transaction view screen, user should get a Drop Down list for Bond Name, The Bond Name can be derived from Bond Table attribute called 'Bond Name'(chield, master relation). The Bond Names list can be any bond name of him or her or his family member's bond name. Family information can be found from Client-family association. The Bond name record's display name should be like Bond Name|PAN as same bond can have multiple member in there portfolio. its easy to identify with Bond Name and Pan. May be an user can have same bond multiple time in their bond transaction table hence if such situation arrise then take first occurance of that user and bond name from their bond transaction table.
-7. Once The Bond Name associated to Bond Transaction in bond sip view transaction screen, the status should be modified to 'EXECUTED'.

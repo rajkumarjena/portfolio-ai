@@ -1,7 +1,0 @@
-4. Using 'Add Family Member' user can add one or many family mamber's of him or her. means a client can have one or many family member. Do the necessary change in entity to accomondate it.
-   4.a. The family member is an existring and registered client. hence user should be given a search drop-down select field under 'add family member' in 'view client' screen.
-   4.b. Minimum 3 characters user need to type in search drop-down field then only applicaiton will hit query to backend client table for matching client name or pan in order to associate him or her to his or her family member.
-
-4.c. Once user select any record from drop-down, the record details like clients details will be displaed under 'add family member' panel like name, pan number and emails etc from client table(create necessary text field in add family member panel for that searched and selected client, also disable the field so as user can'g modify it)
-
-4.d. add three button like add, cancel and delete button in add family member panel, add will confirm the association of new family of the user, cancel will cancel the selected user and allow you user to search again and select his family member and the delete button will de-associate family member whom he associated earlier.
