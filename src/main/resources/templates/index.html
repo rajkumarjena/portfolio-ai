@@ -3,6 +3,39 @@
       th:replace="~{layout :: page('Dashboard', ~{:: #content}, ~{:: #scripts})}">
 <body>
 <main id="content" th:fragment="content" class="content">
+    <!-- BONDBP_V6 #2: the widget panel sits ON TOP of the screen, widgets
+         arranged left to right; the existing dashboard screen stays exactly
+         as it is below it. #1: only the Bonds widget for now - the next
+         widgets (FD, Shares, Mutual Funds, ...) are appended to the right of
+         this card inside the same strip (#7). -->
+    <section class="widget-panel" aria-label="Portfolio summary widgets">
+        <!-- v6.1: tabindex makes the tile focusable so keyboard users get
+             the same zoom (:focus-within mirrors :hover in components.css). -->
+        <article class="widget-card" tabindex="0">
+            <header class="widget-head">
+                <span class="widget-icon"><i data-lucide="landmark"></i></span>
+                <div class="widget-titles">
+                    <h2>Bonds</h2>
+                    <span class="widget-sub">Portfolio Summary</span>
+                </div>
+            </header>
+            <!-- #3: columns exactly as the sample widget report defines them -->
+            <table class="widget-table" id="bondWidgetTable">
+                <thead>
+                <tr>
+                    <th>Bond Return</th>
+                    <th>Self</th>
+                    <th>Family</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr><td colspan="3" class="muted">Loading summary&hellip;</td></tr>
+                </tbody>
+            </table>
+            <footer class="widget-foot" id="bondWidgetFoot"></footer>
+        </article>
+    </section>
+
     <h1>Portfolio Dashboard</h1>
     <p class="muted" th:if="${currentUser != null}">
         Signed in as <strong th:text="${currentUser.displayName}">User (USER)</strong>
@@ -67,6 +100,7 @@
 </main>
 
 <th:block id="scripts" th:fragment="scripts">
+    <script th:src="@{/js/modules/portfolio-summary.js}"></script>
 </th:block>
 </body>
 </html>

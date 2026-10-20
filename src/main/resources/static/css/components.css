@@ -372,6 +372,177 @@ tr.row-SKIPPED     { background: #f4f5f7 !important; color: var(--color-text-mut
 .dash-links a { display: flex; align-items: center; gap: var(--space-2); text-decoration: none; }
 .dash-links a svg { width: 15px; height: 15px; color: var(--color-accent); }
 
+/* ------------------------------------------------------- portfolio widget -- */
+/* BONDBP_V6 #2/#7: the widget strip sits on top of the dashboard, cards
+   arranged left to right; the next widgets (FD, Shares, Mutual Funds, ...)
+   are appended as sibling .widget-card elements inside .widget-panel. */
+.widget-panel {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+    margin-bottom: var(--space-5);
+}
+
+.widget-card {
+    flex: 1 1 380px;
+    min-width: 320px;
+    max-width: 560px;
+    display: flex;
+    flex-direction: column;
+    background: var(--color-surface);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+}
+
+.widget-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    background: var(--color-primary);
+    color: #fff;
+}
+
+.widget-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    flex: none;
+    border-radius: var(--radius);
+    background: rgba(255, 255, 255, 0.18);
+}
+
+.widget-icon svg { width: 18px; height: 18px; }
+
+.widget-titles h2 {
+    margin: 0;
+    font-size: var(--fs-section);
+    color: #fff;
+    line-height: 1.2;
+}
+
+.widget-sub {
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    opacity: 0.85;
+}
+
+.widget-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--fs-body);
+}
+
+.widget-table th {
+    padding: var(--space-2) var(--space-4);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-text-muted);
+    background: var(--color-neutral-soft);
+    text-align: right;
+    border-bottom: 2px solid var(--color-primary-soft);
+}
+
+.widget-table th:first-child { text-align: left; }
+
+.widget-table td {
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--color-border);
+    text-align: right;
+}
+
+.widget-table td.left { text-align: left; }
+.widget-table tbody tr:last-child td { border-bottom: none; }
+.widget-table tbody tr:hover { background: var(--color-primary-soft); }
+
+.widget-label { display: block; font-weight: 600; color: var(--color-text); }
+.widget-range {
+    display: block;
+    margin-top: 2px;
+    font-size: 11px;
+    color: var(--color-text-muted);
+}
+
+.widget-table td.amt {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* The Family column is the secondary figure - the accent teal sets it apart. */
+.widget-table td.amt.family { color: var(--color-accent); }
+
+.widget-foot {
+    margin-top: auto;
+    padding: var(--space-2) var(--space-4);
+    font-size: 11px;
+    color: var(--color-text-muted);
+    background: var(--color-neutral-soft);
+    border-top: 1px solid var(--color-border);
+    text-align: right;
+}
+
+/* ------------------------------------------------- v6.1 mini-tile + zoom -- */
+/* The v6 widget was a full-size card (up to 560x411 on a desktop), which
+   leaves no room for the FD/Shares/MF widgets coming next (#7 of BONDBP_V6).
+   At rest each card becomes a mini-tile: under a quarter of the old
+   footprint (flex basis = 1/4 of the panel per tile, compact type keeps the
+   height roughly half), so 4+ widgets sit in one row. Hovering OR keyboard-
+   focusing a tile zooms it to 4x its area (2x per side - figures go 9px ->
+   18px, clearly readable) as an overlay; app.js picks the transform-origin
+   so the rightmost tile grows leftwards instead of off the page.
+   Mobile keeps the original full-width card (a 1/4 tile is illegible on a
+   phone) and skips the zoom, which would overflow the viewport. */
+@media (min-width: 701px) {
+    .widget-card {
+        flex: 0 1 calc(25% - 12px);  /* (100% - 3 * gap) / 4 -> 4 per row */
+        min-width: 185px;            /* below this the table stops fitting */
+        max-width: 260px;            /* keeps rest area < 1/4 on wide screens */
+        position: relative;
+        z-index: 1;
+        transform-origin: top left;  /* refined per tile in app.js */
+        transition: transform 0.18s ease-out, box-shadow 0.18s ease-out;
+    }
+
+    .widget-card:hover,
+    .widget-card:focus-within {
+        transform: scale(2);         /* 2x per side = 4x the area */
+        z-index: 20;
+        box-shadow: 0 14px 34px rgba(20, 32, 48, 0.22);
+    }
+
+    .widget-card:focus-visible {
+        outline: 2px solid var(--color-primary);
+        outline-offset: 2px;
+    }
+
+    /* Compact head: one short line, small icon. */
+    .widget-head { gap: var(--space-2); padding: 5px var(--space-2); }
+    .widget-icon { width: 20px; height: 20px; }
+    .widget-icon svg { width: 13px; height: 13px; }
+    .widget-titles { display: flex; align-items: baseline; gap: 6px; }
+    .widget-titles h2 { font-size: 11px; }
+    .widget-sub { font-size: 9px; }
+
+    /* Compact table: tight rows, small type - the zoom supplies legibility. */
+    .widget-table { font-size: 9px; }
+    .widget-table th { padding: 3px var(--space-2); font-size: 8px; }
+    .widget-table td { padding: 4px var(--space-2); }
+    .widget-label { font-size: 9px; }
+    .widget-range { margin-top: 0; font-size: 7.5px; line-height: 1.25; }
+    .widget-table td.amt { font-size: 10px; }
+    .widget-foot { padding: 3px var(--space-2); font-size: 8px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .widget-card { transition: none; }
+}
+
 /* ---------------------------------------------------- misc page helpers --- */
 .chip-list { margin: 0 0 var(--space-3); padding: 0; list-style: none; }
 .chip-list li { display: inline-block; margin: 0 var(--space-1) var(--space-1) 0; }

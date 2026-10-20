@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 
 public interface CashFlowDataRepository extends JpaRepository<BondCashFlow, Long> {
@@ -70,4 +71,15 @@ public interface CashFlowDataRepository extends JpaRepository<BondCashFlow, Long
             + " ORDER BY c.date ASC, c.id ASC")
     List<BondCashFlow> findByBondForClient(@Param("clientId") Long clientId,
                                            @Param("bondId") Long bondId);
+
+    // ---------------------------------------------------------------------
+    // BONDBP_V6 #4/#4.c-#4.d: one scope (Self, or Family = the client plus
+    // his/her associated family members) in one query - bond joined eagerly
+    // so the service can net redemptions per bond without a lazy N+1.
+    // Deliberately List-returning with no Pageable: Spring Data would render
+    // "fetch first ? rows only", which this project's SQLiteDialect cannot
+    // translate (same note as in ClientRepository).
+    @Query("SELECT c FROM BondCashFlow c JOIN FETCH c.bond b WHERE b.client.id IN :clientIds"
+            + " ORDER BY c.date ASC, c.id ASC")
+    List<BondCashFlow> findAllForClients(@Param("clientIds") Collection<Long> clientIds);
 }
