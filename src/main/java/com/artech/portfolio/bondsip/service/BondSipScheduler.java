@@ -25,8 +25,12 @@ public class BondSipScheduler {
         this.bondSipService = bondSipService;
     }
 
-    /** 03:00 every day, server time - the SIP still executes ON its (adjusted) date. */
-    @Scheduled(cron = "0 0 3 * * *")
+    /**
+     * BONDBP_V8 #1: daily execution at 00:01 AM (server time) to create due
+     * Bond SIP transactions; also runs on application start via manual trigger
+     * when needed, but @Scheduled handles the daily reboot/time-based run.
+     */
+    @Scheduled(cron = "0 1 0 * * *")
     public void runDaily() {
         try {
             int run = bondSipService.runDueSips();

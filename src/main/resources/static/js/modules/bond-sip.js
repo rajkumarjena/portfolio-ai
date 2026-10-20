@@ -53,8 +53,10 @@
       if (!list) return;
       const body = tbody();
       if (!body) return;
-      body.innerHTML = list.length ? list.map(s => `
-        <tr>
+      body.innerHTML = list.length ? list.map(s => {
+        const cancellable = s.status === 'CREATED' || s.status === 'INPROGRESS';
+        return `
+        <tr data-id="${s.id}">
           <td>${esc(s.issuer)}</td>
           <td>${esc(s.createDate)}</td>
           <td>${esc(s.sipDate)}</td>
@@ -63,8 +65,10 @@
           <td>${s.actualSipAmount == null ? '&mdash;' : money(s.actualSipAmount)}</td>
           <td>${s.bondName ? esc(s.bondName) : '&mdash;'}</td>
           <td>${esc(s.status)}</td>
-        </tr>`).join('')
-        : '<tr><td colspan="8" class="muted">No Bond SIPs yet - create one above.</td></tr>';
+          <td>${cancellable ? '<button type="button" class="btn sip-cancel">Cancel</button>' : ''}</td>
+        </tr>`;
+      }).join('')
+        : '<tr><td colspan="9" class="muted">No Bond SIPs yet - create one above.</td></tr>';
     });
   }
 
@@ -97,6 +101,44 @@
 
     loadIssuers();
     load();
+
+    const body = tbody();
+    if (body) {
+      body.addEventListener('click', function (event) {
+        if (!event.target.classList.contains('sip-cancel')) return;
+        const row = event.target.closest('tr');
+        const id = row.getAttribute('data-id');
+        if (!id) return;
+        if (!confirm('Cancel this Bond SIP?')) return;
+        banner('');
+        Api.guard(Api.post('/api/bond-sips/' + id + '/cancel', {}), 'Could not cancel Bond SIP')
+          .then(function (res) {
+            if (!res) return;
+            banner('Bond SIP cancelled.', true);
+            load();
+          });
+      });
+    }
+
+    const adjustBtn = document.getElementById('adjustBtn');
+    if (adjustBtn) {
+      adjustBtn.addEventListener('click', function () {
+        const msg = document.getElementById('reconcileMsg');
+        if (msg) { msg.style.display = 'none'; msg.textContent = ''; }
+        banner('');
+        Api.guard(Api.post('/api/bond-sips/reconcile', {}), 'Reconciliation failed')
+          .then(function (res) {
+            if (!res) return;
+            if (msg) {
+              msg.textContent = res.message || 'Done';
+              msg.style.display = 'block';
+              msg.classList.toggle('error', false);
+            }
+            load();
+          });
+      });
+    }
+
     if (window.App && window.App.renderIcons) window.App.renderIcons();
   });
 })();

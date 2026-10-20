@@ -7,6 +7,7 @@ import com.artech.portfolio.bondsip.dto.CreateBondSipRequest;
 import com.artech.portfolio.bondsip.dto.UpdateBondSipTransactionRequest;
 
 import java.util.List;
+import java.util.Map;
 
 public interface BondSipService {
 
@@ -34,4 +35,10 @@ public interface BondSipService {
      * frequency schedule (weekend dates roll to the next weekday); idempotent.
      */
     int runDueSips();
+
+    /** BONDBP_V8 #5: cancel an existing Bond SIP (cannot be undone). */
+    BondSipView cancelSip(Long sipId);
+
+    /** BONDBP_V8 #4: reconcile Bond SIPs - creates missing INPROGRESS transactions marked as reconciled. */
+    Map<String, Object> reconcileSips();
 }

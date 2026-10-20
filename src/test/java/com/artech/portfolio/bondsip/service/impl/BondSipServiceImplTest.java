@@ -350,9 +350,10 @@ class BondSipServiceImplTest {
 
     @Test
     void runDueExecutesAWeekdaySipAndCreatesTheInProgressTransaction() {
-        BondSip due = sip(TUESDAY, BondSipConstants.STATUS_CREATED);
+        // BONDBP_V8 #2: only INPROGRESS SIPs generate transactions
+        BondSip due = sip(TUESDAY, BondSipConstants.STATUS_INPROGRESS);
         when(bondSipRepository.findByStatusInAndSipDateLessThanEqualOrderBySipDateAsc(
-                eq(activeStatuses()), eq(TUESDAY))).thenReturn(List.of(due));
+                eq(List.of(BondSipConstants.STATUS_INPROGRESS)), eq(TUESDAY))).thenReturn(List.of(due));
         when(transactionRepository.save(any(BondSipTransaction.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
@@ -384,43 +385,40 @@ class BondSipServiceImplTest {
 
     @Test
     void runDueSkipsAWeekendSipUntilMonday() {
-        // Saturday 17 Oct SIP: not executed ON Saturday...
-        BondSip weekendSip = sip(SATURDAY, BondSipConstants.STATUS_CREATED);
+        // BONDBP_V8 #2: only INPROGRESS SIPs generate transactions
+        BondSip weekendSip = sip(SATURDAY, BondSipConstants.STATUS_INPROGRESS);
         when(bondSipRepository.findByStatusInAndSipDateLessThanEqualOrderBySipDateAsc(
-                eq(activeStatuses()), eq(SATURDAY))).thenReturn(List.of(weekendSip));
+                eq(List.of(BondSipConstants.STATUS_INPROGRESS)), eq(SATURDAY))).thenReturn(List.of(weekendSip));
         assertEquals(0, service.runDueSips(), "#4 rolls Sat -> next weekday");
-        assertEquals(BondSipConstants.STATUS_CREATED, weekendSip.getStatus());
 
         // ...nor on Sunday...
         service = new BondSipServiceImpl(bondSipRepository, transactionRepository,
                 bondRepository, appParamController, currentUserService, clockOn(SUNDAY));
         when(bondSipRepository.findByStatusInAndSipDateLessThanEqualOrderBySipDateAsc(
-                eq(activeStatuses()), eq(SUNDAY))).thenReturn(List.of(weekendSip));
+                eq(List.of(BondSipConstants.STATUS_INPROGRESS)), eq(SUNDAY))).thenReturn(List.of(weekendSip));
         assertEquals(0, service.runDueSips());
 
         // ...but on Monday 19 Oct.
         service = new BondSipServiceImpl(bondSipRepository, transactionRepository,
                 bondRepository, appParamController, currentUserService, clockOn(MONDAY));
         when(bondSipRepository.findByStatusInAndSipDateLessThanEqualOrderBySipDateAsc(
-                eq(activeStatuses()), eq(MONDAY))).thenReturn(List.of(weekendSip));
+                eq(List.of(BondSipConstants.STATUS_INPROGRESS)), eq(MONDAY))).thenReturn(List.of(weekendSip));
         when(transactionRepository.save(any(BondSipTransaction.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
         assertEquals(1, service.runDueSips());
-        assertEquals(BondSipConstants.STATUS_INPROGRESS, weekendSip.getStatus());
     }
 
     @Test
     void runDueRollsSundayToMonday() {
-        BondSip sundaySip = sip(SUNDAY, BondSipConstants.STATUS_CREATED);
+        BondSip sundaySip = sip(SUNDAY, BondSipConstants.STATUS_INPROGRESS);
         when(bondSipRepository.findByStatusInAndSipDateLessThanEqualOrderBySipDateAsc(
-                eq(activeStatuses()), eq(MONDAY))).thenReturn(List.of(sundaySip));
+                eq(List.of(BondSipConstants.STATUS_INPROGRESS)), eq(MONDAY))).thenReturn(List.of(sundaySip));
         when(transactionRepository.save(any(BondSipTransaction.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
         service = new BondSipServiceImpl(bondSipRepository, transactionRepository,
                 bondRepository, appParamController, currentUserService, clockOn(MONDAY));
         assertEquals(1, service.runDueSips());
-        assertEquals(BondSipConstants.STATUS_INPROGRESS, sundaySip.getStatus());
 
         ArgumentCaptor<BondSipTransaction> captor = ArgumentCaptor.forClass(BondSipTransaction.class);
         verify(transactionRepository).save(captor.capture());

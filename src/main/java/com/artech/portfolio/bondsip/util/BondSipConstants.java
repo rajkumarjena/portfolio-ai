@@ -17,6 +17,7 @@ public class BondSipConstants {
     public static final String STATUS_CREATED = "CREATED";
     public static final String STATUS_INPROGRESS = "INPROGRESS";
     public static final String STATUS_EXECUTED = "EXECUTED";
+    public static final String STATUS_CANCELLED = "CANCELLED";
 
     public static final String FREQUENCY_WEEKLY = "WEEKLY";
     public static final String FREQUENCY_MONTHLY = "MONTHLY";

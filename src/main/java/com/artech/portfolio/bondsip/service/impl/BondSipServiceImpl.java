@@ -213,11 +213,10 @@ public class BondSipServiceImpl implements BondSipService {
     public int runDueSips() {
         LocalDate today = LocalDate.now(clock);
         int executed = 0;
-        // Active SIPs: CREATED (nothing generated yet) and INPROGRESS (recurring
-        // - future instalments keep coming due after the first one).
+        // BONDBP_V8 #2: BOND SIP transactions will only be created for SIPs in INPROGRESS status.
         List<BondSip> dueCandidates = bondSipRepository
                 .findByStatusInAndSipDateLessThanEqualOrderBySipDateAsc(
-                        List.of(BondSipConstants.STATUS_CREATED, BondSipConstants.STATUS_INPROGRESS),
+                        List.of(BondSipConstants.STATUS_INPROGRESS),
                         today);
         for (BondSip sip : dueCandidates) {
             int generated = generateDueInstalments(sip, today);
@@ -269,6 +268,7 @@ public class BondSipServiceImpl implements BondSipService {
                 tx.setSipDate(effective);
                 tx.setSipAmount(sip.getSipAmount());
                 tx.setStatus(BondSipConstants.STATUS_INPROGRESS);
+                tx.setReconciliation(Boolean.FALSE);
                 transactionRepository.save(tx);
                 created++;
             }
@@ -340,7 +340,11 @@ public class BondSipServiceImpl implements BondSipService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Bond Name is required to execute the transaction");
         }
-        if (request.getActualSipAmount() != null && request.getActualSipAmount() < 0) {
+        if (request.getActualSipAmount() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Actual SIP Amount is required");
+        }
+        if (request.getActualSipAmount() < 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Actual SIP Amount cannot be negative");
         }
@@ -364,11 +368,97 @@ public class BondSipServiceImpl implements BondSipService {
         BondSipTransaction saved = transactionRepository.save(tx);
 
         // Mirror the entered amount onto the parent SIP screen column (#1/#5).
-        if (request.getActualSipAmount() != null) {
-            tx.getBondSip().setActualSipAmount(request.getActualSipAmount());
-            bondSipRepository.save(tx.getBondSip());
-        }
+        tx.getBondSip().setActualSipAmount(request.getActualSipAmount());
+        bondSipRepository.save(tx.getBondSip());
         return BondSipTransactionView.of(saved);
+    }
+
+    // -------------------------------------------------------- BONDBP_V8 cancel
+
+    @Override
+    @Transactional
+    public BondSipView cancelSip(Long sipId) {
+        Client me = currentUserService.requireClient();
+        BondSip sip = bondSipRepository.findById(sipId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Bond SIP not found"));
+        if (sip.getClient() == null || !me.getId().equals(sip.getClient().getId())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Bond SIP not found");
+        }
+        if (BondSipConstants.STATUS_CANCELLED.equals(sip.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Bond SIP already cancelled");
+        }
+        if (BondSipConstants.STATUS_EXECUTED.equals(sip.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot cancel an executed Bond SIP");
+        }
+        sip.setStatus(BondSipConstants.STATUS_CANCELLED);
+        BondSip saved = bondSipRepository.save(sip);
+        return BondSipView.of(saved, null);
+    }
+
+    // ------------------------------------------------------ BONDBP_V8 reconcile
+
+    @Override
+    @Transactional
+    public Map<String, Object> reconcileSips() {
+        Client me = currentUserService.requireClient();
+        LocalDate today = LocalDate.now(clock);
+        List<BondSip> sips = bondSipRepository.findByClientIdOrderByIdAsc(me.getId());
+        List<Map<String, Object>> missing = new ArrayList<>();
+        int created = 0;
+
+        for (BondSip sip : sips) {
+            if (BondSipConstants.STATUS_CANCELLED.equals(sip.getStatus())
+                    || BondSipConstants.STATUS_EXECUTED.equals(sip.getStatus())) {
+                continue;
+            }
+            // Only reconcile INPROGRESS SIPs (transactions only on INPROGRESS per V8 #2)
+            if (!BondSipConstants.STATUS_INPROGRESS.equals(sip.getStatus())) {
+                continue;
+            }
+            String frequency = normalizeFrequency(sip.getFrequency());
+            if (frequency == null) {
+                frequency = BondSipConstants.FREQUENCY_MONTHLY;
+            }
+            Set<LocalDate> generated = new HashSet<>();
+            for (BondSipTransaction existing : transactionRepository.findByBondSipId(sip.getId())) {
+                if (existing.getSipDate() != null) {
+                    generated.add(existing.getSipDate());
+                }
+            }
+            LocalDate due = sip.getSipDate();
+            while (due != null) {
+                LocalDate effective = effectiveSipDate(due);
+                if (effective.isAfter(today)) {
+                    break;
+                }
+                if (generated.add(effective)) {
+                    BondSipTransaction tx = new BondSipTransaction();
+                    tx.setBondSip(sip);
+                    tx.setIssuer(sip.getIssuer());
+                    tx.setCreateDate(sip.getCreateDate());
+                    tx.setSipDate(effective);
+                    tx.setSipAmount(sip.getSipAmount());
+                    tx.setStatus(BondSipConstants.STATUS_INPROGRESS);
+                    tx.setReconciliation(Boolean.TRUE);
+                    transactionRepository.save(tx);
+                    created++;
+                    missing.add(Map.of(
+                            "sipId", sip.getId(),
+                            "transactionDate", effective.toString(),
+                            "sipAmount", sip.getSipAmount(),
+                            "issuer", sip.getIssuer()
+                    ));
+                }
+                due = nextInstalmentDate(due, frequency);
+            }
+        }
+
+        if (created == 0) {
+            return Map.of("message", "All transactions are present. Reconciliation is good.", "created", 0);
+        }
+        return Map.of("message", "Missing transactions identified and created from reconciliation process.",
+                "created", created, "missing", missing);
     }
 
     // ------------------------------------------------------------- #6 options

@@ -34,10 +34,11 @@
 
   function rowHtml(tx) {
     const done = tx.status === 'EXECUTED';
+    const actualDefault = tx.actualSipAmount == null ? tx.sipAmount : tx.actualSipAmount;
     const actualCell = done
-      ? (tx.actualSipAmount == null ? '&mdash;' : money(tx.actualSipAmount))
-      : `<input type="number" class="txn-actual" min="0" step="0.01"
-                value="${tx.actualSipAmount == null ? '' : tx.actualSipAmount}">`;
+      ? (tx.actualSipAmount == null ? money(tx.sipAmount) : money(tx.actualSipAmount))
+      : `<input type="number" class="txn-actual" min="0" step="0.01" required
+                value="${actualDefault}">`;
     return `
       <tr data-id="${tx.id}">
         <td>${esc(tx.issuer)}</td>
@@ -70,15 +71,20 @@
 
   function saveRow(row) {
     const id = row.getAttribute('data-id');
-    const actualValue = row.querySelector('.txn-actual').value;
+    const actualInput = row.querySelector('.txn-actual');
+    const actualValue = actualInput ? actualInput.value : '';
     const bondValue = row.querySelector('.txn-bond').value;
+    if (actualValue === '' || actualValue === null) {
+      banner('Actual SIP Amount is mandatory.', false);
+      return;
+    }
     if (!bondValue) {
-      banner('Please select a Bond Name before saving.', false);
+      banner('Bond Name is mandatory.', false);
       return;
     }
     banner('');
     const payload = {
-      actualSipAmount: actualValue === '' ? null : Number(actualValue),
+      actualSipAmount: Number(actualValue),
       bondId: Number(bondValue)
     };
     Api.guard(Api.put('/api/bond-sips/transactions/' + id, payload),

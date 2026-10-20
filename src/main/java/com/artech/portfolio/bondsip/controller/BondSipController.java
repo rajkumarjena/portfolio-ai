@@ -65,6 +65,18 @@ public class BondSipController {
         return Map.of("executed", bondSipService.runDueSips());
     }
 
+    /** BONDBP_V8 #5: cancel a Bond SIP at any time. */
+    @PostMapping("/{id}/cancel")
+    public BondSipView cancel(@PathVariable Long id) {
+        return bondSipService.cancelSip(id);
+    }
+
+    /** BONDBP_V8 #4: reconciliation/adjust check. */
+    @PostMapping("/reconcile")
+    public Map<String, Object> reconcile() {
+        return bondSipService.reconcileSips();
+    }
+
     /** Validation / not-found errors surface as a clean 400/404/409, never a 500. */
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<Map<String, String>> handleStatus(ResponseStatusException ex) {

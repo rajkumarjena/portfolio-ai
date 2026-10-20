@@ -44,4 +44,7 @@ public class BondSipTransaction {
 
     /** #4: created as INPROGRESS; #7: becomes EXECUTED once the bond is associated. */
     private String status;
+
+    /** BONDBP_V8 #4: true if this transaction was created by the reconciliation/adjust process. */
+    private Boolean reconciliation;
 }
