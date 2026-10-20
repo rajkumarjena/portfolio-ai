@@ -6,6 +6,7 @@ import com.artech.portfolio.bond.repository.CashFlowDTO;
 import com.artech.portfolio.bond.repository.CashFlowDataRepository;
 import com.artech.portfolio.bond.service.CashFlowDataService;
 import com.artech.portfolio.bond.util.DateUtils;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -37,8 +38,11 @@ public class CashFlowDataServiceImpl implements CashFlowDataService {
     @Override
     public List<CashFlowDTO> getAllCashFlows() {
         Long clientId = clientIdOrNull();
+        // BONDBP_V4 #1: the Bond Returns Report is always ordered by payment
+        // date ascending. Both paths are ordered in SQL: the scoped finder has
+        // ORDER BY in the JPQL, and the ADMIN path gets the equivalent Sort.
         List<BondCashFlow> rows = clientId == null
-                ? cashFlowDataRepository.findAll()
+                ? cashFlowDataRepository.findAll(Sort.by(Sort.Direction.ASC, "date", "id"))
                 : cashFlowDataRepository.findAllForClient(clientId);
         return rows.stream().map(this::toDTO).toList();
     }

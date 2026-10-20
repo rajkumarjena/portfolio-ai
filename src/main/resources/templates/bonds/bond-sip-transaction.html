@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: page('Bond SIP Transactions', ~{:: #content}, ~{:: #scripts})}">
+<body>
+<main id="content" th:fragment="content" class="content">
+    <h1>Bond SIP Transactions</h1>
+    <p class="muted">One row per instalment, auto-created per the Bond SIP's frequency schedule
+        (BONDBP_V7 #4) - a SIP entered with a past date is backfilled with every instalment due so far,
+        all <strong>INPROGRESS</strong> here. Issuer, Create Date, SIP Date (that instalment's due date,
+        weekend dates rolled to the next weekday) and SIP Amount are fixed by the SIP and cannot be
+        changed (#5). Enter the <strong>Actual SIP Amount</strong> and associate a <strong>Bond Name</strong>
+        from the drop-down (your own and your family members' bonds, shown as <em>Bond Name|PAN</em>) -
+        that transaction then turns EXECUTED (#6/#7).</p>
+
+    <div id="statusBanner" class="status-banner" style="display:none;"></div>
+
+    <table class="data-table" id="sipTransactions">
+        <thead>
+        <tr>
+            <th>Issuer</th><th>Create Date</th><th>SIP Date</th><th>SIP Amount</th>
+            <th>Actual SIP Amount</th><th>Bond Name</th><th>Status</th><th></th>
+        </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <div class="nav-buttons">
+        <a class="btn" href="/index.html"><i data-lucide="house"></i>Home</a>
+        <a class="btn" href="/bonds/bond-sip.html">
+            <i data-lucide="calendar-days"></i>Bond SIP</a>
+    </div>
+</main>
+
+<th:block id="scripts" th:fragment="scripts">
+    <script th:src="@{/js/modules/bond-sip-transaction.js}"></script>
+</th:block>
+</body>
+</html>

@@ -1,16 +1,29 @@
 package com.artech.portfolio.client.service.impl;
 
+import com.artech.portfolio.client.dto.ClientSearchResult;
 import com.artech.portfolio.client.entity.Client;
+import com.artech.portfolio.client.entity.ClientFamilyMember;
 import com.artech.portfolio.client.repository.ClientRepository;
 import com.artech.portfolio.client.service.ClientService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
 public class ClientServiceImpl implements ClientService {
+
+    /**
+     * BONDBP_V5 #4.b: the backend is only hit once the user has typed at least
+     * three characters in the search drop-down.
+     */
+    private static final int MIN_CLIENT_SEARCH_CHARS = 3;
+
+    /** BONDBP_V5 #5: cap so the type-ahead stays cheap on a huge client table. */
+    private static final int MAX_CLIENT_SEARCH_RESULTS = 20;
+
     private final ClientRepository clientRepository;
 
     public ClientServiceImpl(ClientRepository clientRepository) {
@@ -28,6 +41,10 @@ public class ClientServiceImpl implements ClientService {
                     "A client with PAN " + client.getPan() + " already exists");
         }
 
+        // BONDBP_V5 #4: family members are associations with other registered
+        // clients and are managed exclusively through the /family-members
+        // endpoints - never accepted from a generic save payload.
+        client.setFamilyMembers(new ArrayList<>());
         bindChildren(client);
         return clientRepository.save(client);
     }
@@ -77,8 +94,78 @@ public class ClientServiceImpl implements ClientService {
                     .filter(b -> b.getId() == null)
                     .forEach(client::addBankAccount);
         }
+        // BONDBP_V5 #4: incoming familyMembers are deliberately NOT bound here.
+        // Associations are only created/removed through addFamilyMember /
+        // removeFamilyMember so every rule (existing client, no self, no
+        // duplicate) is enforced server-side in one place.
 
         return clientRepository.save(client);
+    }
+
+    @Override
+    public List<ClientSearchResult> searchClients(String query, Long forClientId) {
+        String q = query == null ? "" : query.trim();
+        // BONDBP_V5 #4.b - enforced on the server, not only in the browser.
+        if (q.length() < MIN_CLIENT_SEARCH_CHARS) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Minimum " + MIN_CLIENT_SEARCH_CHARS + " characters required to search clients");
+        }
+        List<Client> matches = clientRepository.searchByNameOrPan(
+                q, forClientId, MAX_CLIENT_SEARCH_RESULTS);
+        return matches.stream().map(this::toSearchResult).toList();
+    }
+
+    @Override
+    public Client addFamilyMember(Long clientId, Long memberClientId) {
+        Client owner = getClientById(clientId);
+        Client member = clientRepository.findById(memberClientId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Client not found with id " + memberClientId));
+
+        // BONDBP_V5 #4.a: the member must be an existing registered client and
+        // cannot be the client himself.
+        if (owner.getId().equals(member.getId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "A client cannot be their own family member");
+        }
+        boolean alreadyAssociated = owner.getFamilyMembers().stream()
+                .anyMatch(link -> link.getMember() != null
+                        && link.getMember().getId().equals(member.getId()));
+        if (alreadyAssociated) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    member.getName() + " is already a family member of " + owner.getName());
+        }
+
+        ClientFamilyMember link = new ClientFamilyMember();
+        link.setMember(member);
+        owner.addFamilyMember(link); // also binds the owner back-reference
+        return clientRepository.save(owner);
+    }
+
+    @Override
+    public Client removeFamilyMember(Long clientId, Long memberClientId) {
+        Client owner = getClientById(clientId);
+        ClientFamilyMember link = owner.getFamilyMembers().stream()
+                .filter(l -> l.getMember() != null && l.getMember().getId().equals(memberClientId))
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Client " + memberClientId + " is not a family member of " + owner.getName()));
+        owner.getFamilyMembers().remove(link); // orphanRemoval deletes the row
+        return clientRepository.save(owner);
+    }
+
+    private ClientSearchResult toSearchResult(Client client) {
+        ClientSearchResult result = new ClientSearchResult();
+        result.setId(client.getId());
+        result.setName(client.getName());
+        result.setPan(client.getPan());
+        if (client.getEmails() != null) {
+            client.getEmails().forEach(e -> result.getEmails().add(e.getEmail()));
+        }
+        if (client.getMobileNumbers() != null) {
+            client.getMobileNumbers().forEach(m -> result.getMobileNumbers().add(m.getMobileNumber()));
+        }
+        return result;
     }
 
     private void normalize(Client client) {

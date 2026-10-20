@@ -37,7 +37,12 @@ public class AppParamController {
 
     @PostMapping
     public AppParamConfig saveBond(@RequestBody AppParamConfig appParamConfig) {
-        return appParamRepository.save(appParamConfig);
+        AppParamConfig saved = appParamRepository.save(appParamConfig);
+        // Reload the cache right away so a freshly configured value (e.g. a new
+        // bond issuer for the Bond / Bond SIP screens) is served immediately;
+        // the scheduled refresh below keeps handling external table changes.
+        refreshConfig();
+        return saved;
     }
 
     @Scheduled(fixedRateString = "${app.config.refreshRateDuration}")

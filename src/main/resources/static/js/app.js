@@ -69,6 +69,42 @@
         }
     }
 
+    // BONDBP_V6 v6.1: widget tiles zoom with `transform: scale(2)`
+    // (components.css). Keep the zoomed tile inside the widget panel by
+    // picking its transform-origin from where it currently sits: the
+    // rightmost tile must grow leftwards, otherwise it would overflow the
+    // page horizontally. Runs on delegation, so every widget card - the
+    // Bonds tile today, the FD/MF/Shares tiles next - gets it for free.
+    var WIDGET_ZOOM = 2; // keep in sync with .widget-card:hover scale()
+
+    function setWidgetOrigin(tile) {
+        var panel = tile.closest && tile.closest('.widget-panel');
+        if (!panel) return;
+        var r = tile.getBoundingClientRect();
+        var p = panel.getBoundingClientRect();
+        var grown = r.width * WIDGET_ZOOM;
+        var origin = 'left';
+        if (r.left + grown > p.right + 1) {
+            origin = (r.right - grown >= p.left - 1) ? 'right' : 'center';
+        }
+        tile.style.transformOrigin = origin + ' top';
+    }
+
+    function widgetTileOf(event) {
+        var target = event.target;
+        return target && target.closest ? target.closest('.widget-card') : null;
+    }
+
+    document.addEventListener('mouseover', function (event) {
+        var tile = widgetTileOf(event);
+        if (tile) setWidgetOrigin(tile);
+    });
+
+    document.addEventListener('focusin', function (event) {
+        var tile = widgetTileOf(event);
+        if (tile) setWidgetOrigin(tile);
+    });
+
     document.addEventListener('DOMContentLoaded', function () {
         var toggle = document.getElementById('menuToggle');
         var sidebar = document.getElementById('sidebar');

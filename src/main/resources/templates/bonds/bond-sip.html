@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: page('Bond SIP', ~{:: #content}, ~{:: #scripts})}">
+<body>
+<main id="content" th:fragment="content" class="content">
+    <h1>Bond SIP</h1>
+    <p class="muted">Set up a systematic bond investment (BONDBP_V7). Instalments are generated
+        automatically per the selected <strong>Frequency</strong> (weekly to yearly, like a bond's coupon
+        frequency) - a past SIP date is backfilled with every instalment already due, each one waiting on
+        the Bond SIP Transactions screen for the actual amount and the bond to associate.</p>
+
+    <div class="form-container">
+        <div class="form-left">
+            <div id="statusBanner" class="status-banner" style="display:none;"></div>
+            <form id="bondSipForm">
+                <div>
+                    <label>Issuer *</label>
+                    <!-- Configurable: drop-down of the issuers configured in app_param_config
+                         (param name: issuer) via the cached App Config object, exactly like the
+                         Bond screen's Issuer field (/api/bonds/issuer). -->
+                    <select id="issuer" name="issuer" required>
+                        <option value="" disabled selected>-- Select Issuer --</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Create Date</label>
+                    <!-- #2: auto-populated to the current date and always disabled -->
+                    <input type="date" id="createDate" name="createDate" disabled>
+                </div>
+                <div>
+                    <label>SIP Date *</label>
+                    <input type="date" id="sipDate" name="sipDate" required>
+                </div>
+                <div>
+                    <label>SIP Amount *</label>
+                    <input type="number" id="sipAmount" name="sipAmount" min="0.01" step="0.01" required
+                           placeholder="e.g. 5000">
+                </div>
+                <div>
+                    <label>Frequency *</label>
+                    <!-- Like a bond's coupon frequency: drives how often a Bond SIP
+                         Transaction record is auto-created. A past SIP Date is
+                         backfilled with every instalment already due. -->
+                    <select id="frequency" name="frequency" required>
+                        <option value="" disabled selected>-- Select Frequency --</option>
+                        <option value="WEEKLY">WEEKLY</option>
+                        <option value="MONTHLY">MONTHLY</option>
+                        <option value="QUARTERLY">QUARTERLY</option>
+                        <option value="HALF-YEARLY">HALF-YEARLY</option>
+                        <option value="YEARLY">YEARLY</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Actual SIP Amount</label>
+                    <!-- #5: entered later on the Bond SIP Transaction screen -->
+                    <input type="number" id="actualSipAmount" name="actualSipAmount" disabled
+                           placeholder="Filled from the SIP transaction">
+                </div>
+                <div>
+                    <label>Bond Name</label>
+                    <!-- #6/#7: associated later on the Bond SIP Transaction screen -->
+                    <input type="text" id="bondName" name="bondName" disabled
+                           placeholder="Associated from the SIP transaction">
+                </div>
+                <div>
+                    <label>Status</label>
+                    <!-- #3: disabled all the time -->
+                    <input type="text" id="status" name="status" value="CREATED" disabled>
+                </div>
+                <button type="submit" id="saveBtn" class="primary">Create Bond SIP</button>
+            </form>
+        </div>
+
+        <div class="form-right">
+            <div class="calculation-card">
+                <h3>How it works</h3>
+                <ul class="plain-list">
+                    <li>The Issuer drop-down lists the issuers configured in Application Parameter
+                        Configuration (param name: issuer), refreshed from the App Config object
+                        every 15 minutes. SIP Date, SIP Amount and Frequency are mandatory;
+                        Create Date is stamped to today.</li>
+                    <li>Status starts as CREATED and is never editable (#3); it turns INPROGRESS
+                        once the first instalment is generated.</li>
+                    <li>One Bond SIP Transaction record is auto-created per due instalment of the
+                        frequency schedule - entering a past SIP date backfills every instalment
+                        due so far; weekend dates roll to the next weekday (#4).</li>
+                    <li>On the transaction screen you enter the Actual SIP Amount and pick the bond
+                        (Bond Name|PAN, own or family) per instalment - that transaction then turns
+                        EXECUTED (#5-#7).</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <h2>Bond SIPs</h2>
+    <div class="nav-buttons" style="justify-content:flex-start;margin-top:0;">
+        <button type="button" id="adjustBtn" class="btn"><i data-lucide="refresh-cw"></i>Adjust / Reconcile</button>
+    </div>
+    <div id="reconcileMsg" class="status-banner" style="display:none;margin-top:10px;"></div>
+    <table class="data-table" id="sipList">
+        <thead>
+        <tr>
+            <th>Issuer</th><th>Create Date</th><th>SIP Date</th><th>SIP Amount</th>
+            <th>Frequency</th><th>Actual SIP Amount</th><th>Bond Name</th><th>Status</th><th>Actions</th>
+        </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <div class="nav-buttons">
+        <a class="btn" href="/index.html"><i data-lucide="house"></i>Home</a>
+        <a class="btn" href="/bonds/bond-sip-transaction.html">
+            <i data-lucide="arrow-right-left"></i>Bond SIP Transactions</a>
+    </div>
+</main>
+
+<th:block id="scripts" th:fragment="scripts">
+    <script th:src="@{/js/modules/bond-sip.js}"></script>
+</th:block>
+</body>
+</html>
