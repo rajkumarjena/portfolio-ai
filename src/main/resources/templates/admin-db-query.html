@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: page('Database Query', ~{:: #content}, ~{:: #scripts})}">
+<body>
+<main id="content" th:fragment="content" class="content">
+    <h1>Database Query</h1>
+
+    <div class="note"><strong>Admin only (ADMIN_V1).</strong> Run a supported SQL statement against the
+        server database and see the outcome here. A successful <strong>DQL</strong> query (SELECT / VALUES)
+        downloads its complete result as a CSV file &mdash; column names as the header row, every returned
+        data row below. DML, DDL and TCL statements just report <code>Status: Success</code>, and a failing
+        query shows its database error on this screen so you can correct it and retry.</div>
+
+    <div class="form-container">
+        <div class="form-left">
+            <!-- #4: status / error area - the execution result shows up right here -->
+            <div id="statusBanner" class="status-banner result" style="display:none;"></div>
+
+            <form id="dbQueryForm">
+                <div>
+                    <label>SQL Category *</label>
+                    <!-- #1: DQL / DML / DDL / TCL -->
+                    <select id="sqlCategory" name="sqlCategory" required>
+                        <option value="" disabled selected>-- Select Category --</option>
+                        <option value="DQL">DQL &mdash; Data Query Language (SELECT, VALUES)</option>
+                        <option value="DML">DML &mdash; Data Manipulation Language (INSERT, UPDATE, DELETE, REPLACE)</option>
+                        <option value="DDL">DDL &mdash; Data Definition Language (CREATE, DROP, ALTER, VACUUM)</option>
+                        <option value="TCL">TCL &mdash; Transaction Control Language (BEGIN, COMMIT, ROLLBACK, SAVEPOINT)</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="sqlInput">SQL Query *</label>
+                    <!-- #2: multi-line text area -->
+                    <textarea id="sqlInput" name="sqlInput" rows="8" required
+                              style="width:100%;height:180px;display:block;margin-top:4px;"
+                              spellcheck="false"
+                              placeholder="SELECT name, role FROM client ORDER BY id;"></textarea>
+                </div>
+                <!-- #3: Execute -->
+                <button type="submit" id="executeBtn" class="primary">
+                    <i data-lucide="play"></i>Execute</button>
+            </form>
+        </div>
+
+        <div class="form-right">
+            <div class="calculation-card">
+                <h3>How it works</h3>
+                <ul class="plain-list">
+                    <li>Pick the <strong>category</strong> first: it validates the statement you typed
+                        (a DELETE under DQL is rejected before it runs).</li>
+                    <li><strong>DQL</strong> (SELECT, VALUES) returns the complete result set as a CSV
+                        download with the column names on the first row.</li>
+                    <li><strong>DML</strong> (INSERT, UPDATE, DELETE, REPLACE), <strong>DDL</strong>
+                        (CREATE, DROP, ALTER, VACUUM) and <strong>TCL</strong> (BEGIN, COMMIT, ROLLBACK,
+                        SAVEPOINT) report success without a file.</li>
+                    <li>Empty queries never run; a failing query shows the actual database error on
+                        this screen for a retry. Every execution is audit-logged with your user,
+                        the SQL and the outcome, with a statement timeout and a maximum result size
+                        in force.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="nav-buttons">
+        <a class="btn" href="/index.html"><i data-lucide="house"></i>Home</a>
+        <a class="btn" href="/admin-db-backup.html">
+            <i data-lucide="database-backup"></i>Database Backup</a>
+    </div>
+</main>
+
+<th:block id="scripts" th:fragment="scripts">
+    <script th:src="@{/js/modules/admin-db-query.js}"></script>
+</th:block>
+</body>
+</html>

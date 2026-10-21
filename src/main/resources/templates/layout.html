@@ -69,6 +69,8 @@
                 <i data-lucide="shield-check"></i>Manage Users</a>
             <a th:href="@{/admin-db-backup.html}" class="nav-link" th:if="${currentUser != null and currentUser.admin}">
                 <i data-lucide="database-backup"></i>Database Backup</a>
+            <a th:href="@{/admin-db-query.html}" class="nav-link" th:if="${currentUser != null and currentUser.admin}">
+                <i data-lucide="terminal"></i>Database Query</a>
         </nav>
     </aside>
 

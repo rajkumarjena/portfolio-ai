@@ -55,6 +55,13 @@ pf:
 app:
   config:
     refreshRateDuration: PT15M
+  # ADMIN_V1 Database Query: controls for direct database access (they do not
+  # change the screen's behaviour - they only bound what a query can cost).
+  admin:
+    query:
+      max-rows: 10000          # maximum DQL result rows returned to the screen
+      timeout-seconds: 30      # statement execution timeout
+      max-sql-length: 100000   # maximum size of one submitted query
   # BACKUP.md 3: pause before backup/refresh so in-flight requests can finish
   maintenance:
     drain-ms: 8000

@@ -54,7 +54,7 @@ public class SecurityConfig {
                         "/js/**", "/css/**", "/assets/**").permitAll()
                 // --- admin business process (AUTH.md e) ---
                 .requestMatchers("/admin-users.html", "/admin-db-backup.html",
-                        "/api/admin/**").hasRole("ADMIN")
+                        "/admin-db-query.html", "/api/admin/**").hasRole("ADMIN")
                 // --- everything else: any authenticated user (USER, SUPERVISOR or ADMIN) ---
                 .anyRequest().authenticated())
             // AUTH.md (a): form login on our own static page
