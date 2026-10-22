@@ -3,22 +3,16 @@ package com.artech.portfolio.bondsip.service.impl;
 import com.artech.portfolio.auth.service.CurrentUserService;
 import com.artech.portfolio.bond.entity.Bond;
 import com.artech.portfolio.bond.repository.BondRepository;
-import com.artech.portfolio.bondsip.dto.BondSipBondOption;
-import com.artech.portfolio.bondsip.dto.BondSipTransactionView;
+import com.artech.portfolio.bond.util.BondConstants;
 import com.artech.portfolio.bondsip.dto.BondSipView;
 import com.artech.portfolio.bondsip.dto.CreateBondSipRequest;
-import com.artech.portfolio.bondsip.dto.UpdateBondSipTransactionRequest;
 import com.artech.portfolio.bondsip.entity.BondSip;
-import com.artech.portfolio.bondsip.entity.BondSipTransaction;
 import com.artech.portfolio.bondsip.repository.BondSipRepository;
-import com.artech.portfolio.bondsip.repository.BondSipTransactionRepository;
 import com.artech.portfolio.bondsip.service.BondSipService;
 import com.artech.portfolio.bondsip.util.BondSipConstants;
 import com.artech.portfolio.client.entity.Client;
-import com.artech.portfolio.client.entity.ClientFamilyMember;
 import com.artech.portfolio.common.controller.AppParamController;
 import com.artech.portfolio.common.entity.AppParamConfig;
-import com.artech.portfolio.bond.util.BondConstants;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,62 +22,52 @@ import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 /**
- * BONDBP_V7 - Bond SIP, all rules server-side (#5 of the series' convention):
+ * BONDBP_V7/V9 - Bond SIP, all rules server-side:
  *
- *  #2  Issuer / SIP Date / SIP Amount are mandatory; Create Date is stamped
- *      from the clock (the form field is disabled), Status is always CREATED.
- *      The Issuer is configurable: it must come from the bond issuers
- *      configured in app_param_config (param name: issuer), served through the
- *      cached App Config object that refreshes every app.config.refreshRateDuration
- *      (15 minutes by default) - the same list the Bond screen's Issuer
- *      drop-down uses (/api/bonds/issuer).
+ *  #2  Issuer / SIP Date / SIP Amount are mandatory; Investment Date (BONDBP_V9
+ *      #3, was Create Date) is stamped from the clock (the form field is
+ *      disabled), Status is always CREATED. The Issuer must come from the bond
+ *      issuers configured in app_param_config (param name: issuer) - the same
+ *      list the Bond screen's Issuer drop-down uses (/api/bonds/issuer).
  *  #3  Status is never client-supplied.
- *  #4  The scheduler executes due SIPs: on a Mon-Fri SIP date the status turns
- *      INPROGRESS on that date; a weekend date rolls to the next weekday
- *      (Sat -> Mon, Sun -> Mon). Execution creates a Bond SIP Transaction
- *      record with status INPROGRESS holding the immutable SIP snapshot.
- *      Instalments follow the SIP's Frequency (like a bond's coupon
- *      frequency): WEEKLY / MONTHLY / QUARTERLY / HALF-YEARLY / YEARLY. Every
- *      due instalment date creates one transaction - and a SIP entered with a
- *      past SIP Date is backfilled on the spot with every instalment due from
- *      that date up to today, all INPROGRESS on the transaction screen for the
- *      user to complete (#5/#7). Generation is idempotent: an instalment whose
- *      effective (weekday-adjusted) date already has a transaction is skipped.
- *  #5  On the transaction screen only Actual SIP Amount may be entered.
- *  #6  The Bond Name dropdown lists the signed-in client's and his/her family
- *      members' bonds, labelled "Bond Name|PAN"; duplicated (owner, bond
- *      name) pairs collapse to their first occurrence.
- *  #7  Associating the Bond Name flips the transaction to EXECUTED and
- *      mirrors the Actual SIP Amount back onto the parent SIP.
+ *  #4  BONDBP_V9: on a due SIP date one BOND row is created directly (no
+ *      transaction table any more) with status "In Progress" and Investment
+ *      Type "SIP Investment":
+ *        - Issuer          = the SIP's issuer (same name on all three screens)
+ *        - Investment Date = the SIP's Investment Date (#3)
+ *        - Interest Payment Start Date = the (weekday-adjusted) SIP Date (#4.c)
+ *        - Investment Amount Per Unit  = the SIP Amount (#4.d)
+ *        - Coupon Frequency            = the SIP Frequency (#4.e)
+ *        - every other attribute stays blank for the user to complete on the
+ *          Bond Details Entry screen (#4.f), which turns the row EXECUTED (#4.h).
+ *      Instalments follow the SIP's Frequency; a past SIP Date is backfilled
+ *      on the spot up to today. Generation is idempotent: an instalment date
+ *      that already has a bond row is skipped.
+ *  #5  The nightly 00:00 reconcile job, the 00:01 execution, the restart sync
+ *      and the manual Sync Now button all share runDueSips(); syncStatus()
+ *      powers the screen's "Bond SIP Transaction is OK" banner.
  */
 @Service
 public class BondSipServiceImpl implements BondSipService {
 
     private final BondSipRepository bondSipRepository;
-    private final BondSipTransactionRepository transactionRepository;
     private final BondRepository bondRepository;
     private final AppParamController appParamController;
     private final CurrentUserService currentUserService;
     private final Clock clock;
 
     public BondSipServiceImpl(BondSipRepository bondSipRepository,
-                              BondSipTransactionRepository transactionRepository,
                               BondRepository bondRepository,
                               AppParamController appParamController,
                               CurrentUserService currentUserService,
                               Clock clock) {
         this.bondSipRepository = bondSipRepository;
-        this.transactionRepository = transactionRepository;
         this.bondRepository = bondRepository;
         this.appParamController = appParamController;
         this.currentUserService = currentUserService;
@@ -124,9 +108,9 @@ public class BondSipServiceImpl implements BondSipService {
         }
 
         BondSip sip = new BondSip();
-        sip.setClient(me);                     // CONSISTENCY.md 6 - session, never body
+        sip.setClient(me);                       // CONSISTENCY.md 6 - session, never body
         sip.setIssuer(issuer);
-        sip.setCreateDate(LocalDate.now(clock)); // #2: auto current date
+        sip.setInvestmentDate(LocalDate.now(clock)); // BONDBP_V9 #3: auto current date
         sip.setSipDate(request.getSipDate());
         sip.setSipAmount(request.getSipAmount());
         sip.setFrequency(frequency);
@@ -134,38 +118,66 @@ public class BondSipServiceImpl implements BondSipService {
         BondSip saved = bondSipRepository.save(sip);
 
         // Backfill: a SIP whose date is in the past immediately generates every
-        // instalment already due per its frequency - all INPROGRESS on the
-        // Bond SIP Transaction screen (#4).
+        // instalment already due per its frequency - each one a bond row that is
+        // In Progress on the Bond Records screen (#4).
         if (generateDueInstalments(saved, LocalDate.now(clock)) > 0) {
             saved.setStatus(BondSipConstants.STATUS_INPROGRESS);
             saved = bondSipRepository.save(saved);
         }
-        return BondSipView.of(saved, null);
+        return BondSipView.of(saved);
     }
 
     // ------------------------------------------------------------- #2 configurability
 
-    /**
-     * The configured bond issuers straight from the cached App Config object
-     * (AppParamController), i.e. app_param_config rows with investment type
-     * "bond" and param name "issuer" - the exact list /api/bonds/issuer serves
-     * to the Bond and Bond SIP screens. The cache reloads on the schedule in
-     * application.yaml (app.config.refreshRateDuration, 15 minutes by default).
-     */
-    private Set<String> configuredIssuers() {
-        Set<String> issuers = new LinkedHashSet<>();
+    /** The configured bond issuers (app_param_config, param name: issuer). */
+    private List<AppParamConfig> configRows(String paramName) {
+        List<AppParamConfig> rows = new ArrayList<>();
         for (AppParamConfig row : appParamController.getConfig()) {
             if (row == null || row.getParamValue() == null || row.getParamValue().isBlank()) {
                 continue;
             }
             String type = row.getInvestmentType() == null ? "" : row.getInvestmentType().trim();
             String name = row.getParamName() == null ? "" : row.getParamName().trim();
-            if (BondConstants.BOND.equalsIgnoreCase(type)
-                    && BondConstants.ISSUER.equalsIgnoreCase(name)) {
-                issuers.add(row.getParamValue().trim());
+            if (BondConstants.BOND.equalsIgnoreCase(type) && paramName.equalsIgnoreCase(name)) {
+                rows.add(row);
             }
         }
+        return rows;
+    }
+
+    private Set<String> configuredIssuers() {
+        Set<String> issuers = new java.util.LinkedHashSet<>();
+        for (AppParamConfig row : configRows(BondConstants.ISSUER)) {
+            issuers.add(row.getParamValue().trim());
+        }
         return issuers;
+    }
+
+    /**
+     * BONDBP_V9 #4.b/#11: the Bond screens store the app_param_config row id
+     * for the Issuer drop-down, so a SIP's issuer name is mapped to that id -
+     * all three screens then show the same name. Legacy/unconfigured issuers
+     * are kept as raw text (the screens fall back to showing it as-is).
+     */
+    private String resolveConfigId(String paramName, String displayValue) {
+        for (AppParamConfig row : configRows(paramName)) {
+            if (row.getParamValue().trim().equalsIgnoreCase(displayValue)) {
+                return String.valueOf(row.getId());
+            }
+        }
+        return displayValue;
+    }
+
+    /** BONDBP_V9 #4.e: map a SIP frequency onto the coupon-frequency config value. */
+    private String resolveCouponFrequency(String sipFrequency) {
+        String key = sipFrequency.toUpperCase().replaceAll("[^A-Z0-9]", "");
+        for (AppParamConfig row : configRows(BondConstants.COUPON_FREQUENCY)) {
+            String value = row.getParamValue().toUpperCase().replaceAll("[^A-Z0-9]", "");
+            if (value.equals(key)) {
+                return String.valueOf(row.getId());
+            }
+        }
+        return sipFrequency; // no matching config row - keep the readable text
     }
 
     // ------------------------------------------------------------- #1 list
@@ -174,46 +186,20 @@ public class BondSipServiceImpl implements BondSipService {
     @Transactional(readOnly = true)
     public List<BondSipView> listMine() {
         Client me = currentUserService.requireClient();
-        List<BondSip> sips = bondSipRepository.findByClientIdOrderByIdAsc(me.getId());
-
-        // Bond Name is derived from the first transaction of each SIP that has one.
-        Map<Long, String> bondNamesBySip = new HashMap<>();
-        for (BondSipTransaction tx : transactionRepository.findByBondSipClientIdOrderByIdAsc(me.getId())) {
-            Long sipId = tx.getBondSip().getId();
-            if (!bondNamesBySip.containsKey(sipId) && tx.getBond() != null) {
-                bondNamesBySip.put(sipId, tx.getBond().getBondName());
-            }
-        }
-
-        List<BondSipView> views = new ArrayList<>();
-        for (BondSip sip : sips) {
-            views.add(BondSipView.of(sip, bondNamesBySip.get(sip.getId())));
-        }
-        return views;
+        return bondSipRepository.findByClientIdOrderByIdAsc(me.getId())
+                .stream().map(BondSipView::of).toList();
     }
 
-    // ------------------------------------------------------------- #5 transactions
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<BondSipTransactionView> listTransactions() {
-        Client me = currentUserService.requireClient();
-        List<BondSipTransactionView> views = new ArrayList<>();
-        for (BondSipTransaction tx :
-                transactionRepository.findByBondSipClientIdOrderByIdAsc(me.getId())) {
-            views.add(BondSipTransactionView.of(tx));
-        }
-        return views;
-    }
-
-    // ------------------------------------------------------------- #4 execute
+    // ------------------------------------------- #4/#5 execute + reconcile
 
     @Override
     @Transactional
     public int runDueSips() {
         LocalDate today = LocalDate.now(clock);
-        int executed = 0;
-        // BONDBP_V8 #2: BOND SIP transactions will only be created for SIPs in INPROGRESS status.
+        int created = 0;
+        // BONDBP_V8 #2: instalment bond rows are only created for SIPs in
+        // INPROGRESS status (a CREATED SIP has nothing due yet - creation-time
+        // backfill already handled it).
         List<BondSip> dueCandidates = bondSipRepository
                 .findByStatusInAndSipDateLessThanEqualOrderBySipDateAsc(
                         List.of(BondSipConstants.STATUS_INPROGRESS),
@@ -224,57 +210,74 @@ public class BondSipServiceImpl implements BondSipService {
                 sip.setStatus(BondSipConstants.STATUS_INPROGRESS);
                 bondSipRepository.save(sip);
             }
-            executed += generated;
+            created += generated;
         }
-        return executed;
+        return created;
     }
 
     /**
-     * BONDBP_V7 #4 frequency schedule: walk the SIP date forward by its
-     * frequency (plusMonths clamps month ends, e.g. Jan 31 -> Feb 28) and
-     * create one INPROGRESS transaction per instalment whose weekday-adjusted
-     * date is due on or before today. Instalments that already have a
-     * transaction are skipped, so daily runs and manual re-runs never
-     * duplicate rows.
+     * BONDBP_V9 #4: walk the SIP's frequency schedule up to today (weekend
+     * dates roll to the next weekday) and create one bond row per instalment
+     * that does not have one yet - the idempotency anchor is the bond row's
+     * Interest Payment Start Date.
      *
-     * @return how many NEW transaction records were created.
+     * @return how many NEW bond rows were created.
      */
     private int generateDueInstalments(BondSip sip, LocalDate today) {
-        // Legacy rows predate the frequency column - treat them as monthly.
-        String frequency = normalizeFrequency(sip.getFrequency());
-        if (frequency == null) {
-            frequency = BondSipConstants.FREQUENCY_MONTHLY;
-        }
-        Set<LocalDate> generated = new HashSet<>();
-        for (BondSipTransaction existing : transactionRepository.findByBondSipId(sip.getId())) {
-            if (existing.getSipDate() != null) {
-                generated.add(existing.getSipDate());
+        Set<LocalDate> existing = new HashSet<>();
+        for (Bond bond : bondRepository.findByBondSipId(sip.getId())) {
+            if (bond.getInterestPaymentStartDate() != null) {
+                existing.add(bond.getInterestPaymentStartDate());
             }
         }
 
         int created = 0;
-        LocalDate due = sip.getSipDate();
-        while (due != null) {
-            // #4: a weekend instalment date executes on the following Monday.
-            LocalDate effective = effectiveSipDate(due);
+        for (LocalDate effective : dueEffectiveDates(sip, today)) {
+            if (existing.add(effective)) {
+                bondRepository.save(instalmentBond(sip, effective));
+                created++;
+            }
+        }
+        return created;
+    }
+
+    /**
+     * BONDBP_V9 #4.b-f: the bond row a due instalment becomes - mapped columns
+     * from the Bond SIP screen, everything else deliberately blank (#4.f).
+     */
+    private Bond instalmentBond(BondSip sip, LocalDate effective) {
+        Bond instalment = new Bond();
+        instalment.setClient(sip.getClient());
+        instalment.setBondSipId(sip.getId());
+        instalment.setIssuer(resolveConfigId(BondConstants.ISSUER, sip.getIssuer())); // same name on all screens
+        instalment.setInvestmentDate(sip.getInvestmentDate());                        // #3 / #4.b
+        instalment.setInvestmentAmountPerUnit(sip.getSipAmount());                    // #4.d
+        instalment.setInterestPaymentStartDate(effective);                            // #4.c
+        instalment.setCouponFrequency(resolveCouponFrequency(sip.getFrequency()));    // #4.e
+        instalment.setStatus(BondConstants.STATUS_IN_PROGRESS);                       // #4.b
+        instalment.setInvestmentType(BondConstants.INVESTMENT_TYPE_SIP);              // #4.b / #2
+        // #4.f: bond name, face value, units, coupon rate, maturity date, ... stay
+        // blank/defaulted for the user to complete on the Bond Details Entry screen.
+        return instalment;
+    }
+
+    /** Every weekday-adjusted instalment date of the SIP due on or before today. */
+    static List<LocalDate> dueEffectiveDates(BondSip sip, LocalDate today) {
+        String frequency = normalizeFrequency(sip.getFrequency());
+        if (frequency == null) {
+            frequency = BondSipConstants.FREQUENCY_MONTHLY; // legacy rows predate the column
+        }
+        List<LocalDate> due = new ArrayList<>();
+        LocalDate next = sip.getSipDate();
+        while (next != null) {
+            LocalDate effective = effectiveSipDate(next);
             if (effective.isAfter(today)) {
                 break;
             }
-            if (generated.add(effective)) {   // idempotency anchor
-                BondSipTransaction tx = new BondSipTransaction();
-                tx.setBondSip(sip);
-                tx.setIssuer(sip.getIssuer());      // immutable snapshot (#5)
-                tx.setCreateDate(sip.getCreateDate());
-                tx.setSipDate(effective);
-                tx.setSipAmount(sip.getSipAmount());
-                tx.setStatus(BondSipConstants.STATUS_INPROGRESS);
-                tx.setReconciliation(Boolean.FALSE);
-                transactionRepository.save(tx);
-                created++;
-            }
-            due = nextInstalmentDate(due, frequency);
+            due.add(effective);
+            next = nextInstalmentDate(next, frequency);
         }
-        return created;
+        return due;
     }
 
     /** The next nominal instalment date after the given one, by frequency. */
@@ -317,62 +320,6 @@ public class BondSipServiceImpl implements BondSipService {
         return sipDate;
     }
 
-    // ------------------------------------------------------------- #5 #7 update
-
-    @Override
-    @Transactional
-    public BondSipTransactionView updateTransaction(Long id, UpdateBondSipTransactionRequest request) {
-        Client me = currentUserService.requireClient();
-        BondSipTransaction tx = transactionRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Bond SIP transaction not found"));
-
-        Long ownerId = tx.getBondSip().getClient().getId();
-        if (!me.getId().equals(ownerId)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
-                    "Bond SIP transaction not found");
-        }
-        if (BondSipConstants.STATUS_EXECUTED.equals(tx.getStatus())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Bond SIP transaction is already executed");
-        }
-        if (request.getBondId() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Bond Name is required to execute the transaction");
-        }
-        if (request.getActualSipAmount() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Actual SIP Amount is required");
-        }
-        if (request.getActualSipAmount() < 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Actual SIP Amount cannot be negative");
-        }
-
-        // #6: the bond must be one of the allowed options (own or family's).
-        Bond bond = null;
-        for (Bond candidate : allowedBonds(me)) {
-            if (request.getBondId().equals(candidate.getId())) {
-                bond = candidate;
-                break;
-            }
-        }
-        if (bond == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Bond not found in your or your family member's portfolio");
-        }
-
-        tx.setBond(bond);
-        tx.setActualSipAmount(request.getActualSipAmount());
-        tx.setStatus(BondSipConstants.STATUS_EXECUTED); // #7
-        BondSipTransaction saved = transactionRepository.save(tx);
-
-        // Mirror the entered amount onto the parent SIP screen column (#1/#5).
-        tx.getBondSip().setActualSipAmount(request.getActualSipAmount());
-        bondSipRepository.save(tx.getBondSip());
-        return BondSipTransactionView.of(saved);
-    }
-
     // -------------------------------------------------------- BONDBP_V8 cancel
 
     @Override
@@ -392,117 +339,50 @@ public class BondSipServiceImpl implements BondSipService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot cancel an executed Bond SIP");
         }
         sip.setStatus(BondSipConstants.STATUS_CANCELLED);
-        BondSip saved = bondSipRepository.save(sip);
-        return BondSipView.of(saved, null);
+        return BondSipView.of(bondSipRepository.save(sip));
     }
 
-    // ------------------------------------------------------ BONDBP_V8 reconcile
-
-    @Override
-    @Transactional
-    public Map<String, Object> reconcileSips() {
-        Client me = currentUserService.requireClient();
-        LocalDate today = LocalDate.now(clock);
-        List<BondSip> sips = bondSipRepository.findByClientIdOrderByIdAsc(me.getId());
-        List<Map<String, Object>> missing = new ArrayList<>();
-        int created = 0;
-
-        for (BondSip sip : sips) {
-            if (BondSipConstants.STATUS_CANCELLED.equals(sip.getStatus())
-                    || BondSipConstants.STATUS_EXECUTED.equals(sip.getStatus())) {
-                continue;
-            }
-            // Only reconcile INPROGRESS SIPs (transactions only on INPROGRESS per V8 #2)
-            if (!BondSipConstants.STATUS_INPROGRESS.equals(sip.getStatus())) {
-                continue;
-            }
-            String frequency = normalizeFrequency(sip.getFrequency());
-            if (frequency == null) {
-                frequency = BondSipConstants.FREQUENCY_MONTHLY;
-            }
-            Set<LocalDate> generated = new HashSet<>();
-            for (BondSipTransaction existing : transactionRepository.findByBondSipId(sip.getId())) {
-                if (existing.getSipDate() != null) {
-                    generated.add(existing.getSipDate());
-                }
-            }
-            LocalDate due = sip.getSipDate();
-            while (due != null) {
-                LocalDate effective = effectiveSipDate(due);
-                if (effective.isAfter(today)) {
-                    break;
-                }
-                if (generated.add(effective)) {
-                    BondSipTransaction tx = new BondSipTransaction();
-                    tx.setBondSip(sip);
-                    tx.setIssuer(sip.getIssuer());
-                    tx.setCreateDate(sip.getCreateDate());
-                    tx.setSipDate(effective);
-                    tx.setSipAmount(sip.getSipAmount());
-                    tx.setStatus(BondSipConstants.STATUS_INPROGRESS);
-                    tx.setReconciliation(Boolean.TRUE);
-                    transactionRepository.save(tx);
-                    created++;
-                    missing.add(Map.of(
-                            "sipId", sip.getId(),
-                            "transactionDate", effective.toString(),
-                            "sipAmount", sip.getSipAmount(),
-                            "issuer", sip.getIssuer()
-                    ));
-                }
-                due = nextInstalmentDate(due, frequency);
-            }
-        }
-
-        if (created == 0) {
-            return Map.of("message", "All transactions are present. Reconciliation is good.", "created", 0);
-        }
-        return Map.of("message", "Missing transactions identified and created from reconciliation process.",
-                "created", created, "missing", missing);
-    }
-
-    // ------------------------------------------------------------- #6 options
+    // ------------------------------------------------------ BONDBP_V9 #5 sync
 
     @Override
     @Transactional(readOnly = true)
-    public List<BondSipBondOption> bondOptions() {
+    public Map<String, Object> syncStatus() {
         Client me = currentUserService.requireClient();
-        Map<String, Bond> firstPerOwnerAndName = new LinkedHashMap<>();
-        for (Bond bond : allowedBonds(me)) {
-            if (bond.getBondName() == null || bond.getBondName().isBlank()
-                    || bond.getClient() == null) {
+        LocalDate today = LocalDate.now(clock);
+        List<BondSip> sips = bondSipRepository.findByClientIdOrderByIdAsc(me.getId());
+
+        int due = 0;
+        int pending = 0;
+        for (BondSip sip : sips) {
+            if (BondSipConstants.STATUS_CANCELLED.equals(sip.getStatus())
+                    || BondSipConstants.STATUS_EXECUTED.equals(sip.getStatus())
+                    || !BondSipConstants.STATUS_INPROGRESS.equals(sip.getStatus())) {
                 continue;
             }
-            // #6: same owner + same bond name -> keep the FIRST occurrence only.
-            String key = bond.getClient().getId() + "\u0000" + bond.getBondName();
-            firstPerOwnerAndName.putIfAbsent(key, bond);
-        }
-        List<BondSipBondOption> options = new ArrayList<>();
-        for (Bond bond : firstPerOwnerAndName.values()) {
-            options.add(new BondSipBondOption(bond.getId(),
-                    bond.getBondName() + "|" + bond.getClient().getPan()));
-        }
-        return options;
-    }
-
-    /**
-     * BONDBP_V7 #6: the signed-in client's bonds plus those of every client he/
-     * she associated as a family member (BONDBP_V5 links), lowest bond id first
-     * so "first occurrence" is deterministic.
-     */
-    private List<Bond> allowedBonds(Client me) {
-        List<Long> scopeIds = new ArrayList<>();
-        scopeIds.add(me.getId());
-        if (me.getFamilyMembers() != null) {
-            for (ClientFamilyMember link : me.getFamilyMembers()) {
-                Long memberId = link.getMember() == null ? null : link.getMember().getId();
-                if (memberId != null && !scopeIds.contains(memberId)) {
-                    scopeIds.add(memberId);
+            Set<LocalDate> existing = new HashSet<>();
+            for (Bond bond : bondRepository.findByBondSipId(sip.getId())) {
+                if (bond.getInterestPaymentStartDate() != null) {
+                    existing.add(bond.getInterestPaymentStartDate());
+                }
+            }
+            for (LocalDate effective : dueEffectiveDates(sip, today)) {
+                due++;
+                if (!existing.contains(effective)) {
+                    pending++;
                 }
             }
         }
-        List<Bond> bonds = new ArrayList<>(bondRepository.findByClientIdIn(scopeIds));
-        bonds.sort(Comparator.comparing(Bond::getId));
-        return bonds;
+
+        boolean ok = pending == 0;
+        String message = ok
+                ? "Bond SIP Transaction is OK - all " + due
+                    + " instalment(s) due so far are present in Bond Records."
+                : pending + " Bond SIP instalment(s) are missing in Bond Records - "
+                    + "run Sync Now or wait for the nightly sync (00:00).";
+        return Map.of(
+                "ok", ok,
+                "message", message,
+                "due", due,
+                "pending", pending);
     }
 }

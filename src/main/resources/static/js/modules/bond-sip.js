@@ -1,6 +1,6 @@
-// bond-sip.js - BONDBP_V7 Bond SIP screen: create a SIP (#2/#3) and list the
-// signed-in client's SIPs with their derived Bond Name / Actual SIP Amount
-// (#1). All validation and lifecycle rules live on the server.
+// bond-sip.js - BONDBP_V9 Bond SIP screen: create a lean Bond SIP (#2/#3) and
+// read its server-computed sync banner (#5). Instalments are bond records on
+// the Bond Records screen now - there is no transaction screen any more.
 (function () {
   'use strict';
 
@@ -10,7 +10,7 @@
 
   const money = n => Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 
-  // Local "YYYY-MM-DD" for the disabled Create Date field (#2).
+  // Local "YYYY-MM-DD" for the disabled Investment Date field (#3).
   function todayIso() {
     const d = new Date();
     const pad = v => String(v).padStart(2, '0');
@@ -27,6 +27,26 @@
     el.textContent = message || '';
     el.style.display = message ? 'block' : 'none';
     el.classList.toggle('error', !ok);
+    el.classList.toggle('info', !!ok);
+  }
+
+  // BONDBP_V9 #5: green "Bond SIP Transaction is OK" or the pending count.
+  function renderSyncStatus(status, ok) {
+    const el = document.getElementById('syncBanner');
+    if (!el || !status) return;
+    const isSuccess = ok != null ? ok : status.ok;
+    el.textContent = status.message || '';
+    el.style.display = status.message ? 'block' : 'none';
+    el.classList.toggle('error', !isSuccess);
+    el.classList.toggle('info', !!isSuccess);
+  }
+
+  function loadSyncStatus() {
+    return Api.guard(Api.get('/api/bond-sips/sync-status'), 'Could not read the sync status')
+      .then(function (status) {
+        if (status) renderSyncStatus(status);
+        return status;
+      });
   }
 
   // Issuer is configurable (app_param_config, param name: issuer) - the same
@@ -58,24 +78,25 @@
         return `
         <tr data-id="${s.id}">
           <td>${esc(s.issuer)}</td>
-          <td>${esc(s.createDate)}</td>
+          <td>${esc(s.investmentDate)}</td>
           <td>${esc(s.sipDate)}</td>
-          <td>${money(s.sipAmount)}</td>
+          <td class="amt">${money(s.sipAmount)}</td>
           <td>${esc(s.frequency)}</td>
-          <td>${s.actualSipAmount == null ? '&mdash;' : money(s.actualSipAmount)}</td>
-          <td>${s.bondName ? esc(s.bondName) : '&mdash;'}</td>
-          <td>${esc(s.status)}</td>
-          <td>${cancellable ? '<button type="button" class="btn sip-cancel">Cancel</button>' : ''}</td>
+          <td><span class="chip">${esc(s.status)}</span></td>
+          <td class="left">${cancellable
+            ? '<button type="button" class="btn btn-sm sip-cancel"><i data-lucide="x"></i>Cancel</button>'
+            : ''}</td>
         </tr>`;
       }).join('')
-        : '<tr><td colspan="9" class="muted">No Bond SIPs yet - create one above.</td></tr>';
+        : '<tr><td colspan="7" class="muted">No Bond SIPs yet - create one above.</td></tr>';
+      if (window.App && window.App.renderIcons) window.App.renderIcons();
     });
   }
 
   document.addEventListener('DOMContentLoaded', function () {
-    // #2: Create Date auto-populates to the current date and is disabled.
-    const createDate = document.getElementById('createDate');
-    if (createDate) createDate.value = todayIso();
+    // #3: Investment Date auto-populates to the current date and is disabled.
+    const investmentDate = document.getElementById('investmentDate');
+    if (investmentDate) investmentDate.value = todayIso();
 
     const form = document.getElementById('bondSipForm');
     if (form) {
@@ -93,20 +114,23 @@
             if (!created) return;
             banner('Bond SIP created with status ' + created.status + '.', true);
             form.reset();
-            if (createDate) createDate.value = todayIso();
+            if (investmentDate) investmentDate.value = todayIso();
             load();
+            loadSyncStatus();
           });
       });
     }
 
     loadIssuers();
     load();
+    loadSyncStatus();
 
     const body = tbody();
     if (body) {
       body.addEventListener('click', function (event) {
-        if (!event.target.classList.contains('sip-cancel')) return;
-        const row = event.target.closest('tr');
+        const button = event.target.closest('.sip-cancel');
+        if (!button) return;
+        const row = button.closest('tr');
         const id = row.getAttribute('data-id');
         if (!id) return;
         if (!confirm('Cancel this Bond SIP?')) return;
@@ -120,21 +144,22 @@
       });
     }
 
-    const adjustBtn = document.getElementById('adjustBtn');
-    if (adjustBtn) {
-      adjustBtn.addEventListener('click', function () {
-        const msg = document.getElementById('reconcileMsg');
-        if (msg) { msg.style.display = 'none'; msg.textContent = ''; }
+    // BONDBP_V9 #5: manual Sync Now - same idempotent job the scheduler runs.
+    const syncBtn = document.getElementById('syncBtn');
+    if (syncBtn) {
+      syncBtn.addEventListener('click', function () {
+        syncBtn.disabled = true;
         banner('');
-        Api.guard(Api.post('/api/bond-sips/reconcile', {}), 'Reconciliation failed')
-          .then(function (res) {
-            if (!res) return;
-            if (msg) {
-              msg.textContent = res.message || 'Done';
-              msg.style.display = 'block';
-              msg.classList.toggle('error', false);
+        Api.guard(Api.post('/api/bond-sips/reconcile', {}), 'Sync failed')
+          .then(function (result) {
+            if (result) {
+              renderSyncStatus(result, result.ok);
+              if (result.created > 0) {
+                banner(result.created + ' missing instalment record(s) were created.', true);
+              }
+              load();
             }
-            load();
+            syncBtn.disabled = false;
           });
       });
     }

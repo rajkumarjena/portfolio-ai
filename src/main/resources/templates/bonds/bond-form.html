@@ -7,7 +7,19 @@
     <div class="form-container">
         <!-- LEFT SIDE: Data Inputs -->
         <div class="form-left">
+            <!-- BONDBP_V9 #5/#7: filled by the server from the record's origin -
+                 One Time Investment for direct entries, SIP Transaction for a
+                 record auto-created from a Bond SIP instalment (#8). Fixed. -->
+            <div id="sipHint" class="note" style="display:none;">
+                This record was auto-created from a <strong>Bond SIP instalment</strong> and is
+                <strong>In Progress</strong>. Enter the remaining mandatory details and save -
+                its status then turns <strong>EXECUTED</strong> (BONDBP_V9 #4.h).</div>
             <form id="bondForm">
+                <div>
+                    <label>Investment Type</label>
+                    <input type="text" id="investmentType" name="investmentType"
+                           class="investment-type" disabled placeholder="Set automatically">
+                </div>
                 <div><label>Bond Name / ISIN</label><input type="text" name="bondName" required></div>
                 <div>
                     <label>Issuer</label>

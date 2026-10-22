@@ -49,7 +49,6 @@ public class WebConfig implements WebMvcConfigurer {
         registry.addViewController("/bonds/bond-view.html").setViewName("bonds/bond-view");
         registry.addViewController("/bonds/bond-return-report.html").setViewName("bonds/bond-return-report");
         registry.addViewController("/bonds/bond-sip.html").setViewName("bonds/bond-sip");
-        registry.addViewController("/bonds/bond-sip-transaction.html").setViewName("bonds/bond-sip-transaction");
 
         registry.addViewController("/fds/fd-form.html").setViewName("fds/fd-form");
         registry.addViewController("/fds/fd-view.html").setViewName("fds/fd-view");

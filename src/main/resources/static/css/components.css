@@ -670,3 +670,36 @@ ul.plain-list { margin: var(--space-2) 0 0; padding-left: var(--space-5); font-s
 .backup-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-3); }
 .backup-actions input[type="file"] { max-width: 100%; }
 #liveStatus:empty { display: none; }
+
+/* ------------------------------------------------------- BONDBP_V9 bonds -- */
+/* #9: eye-catch row colouring on the Bond Records screen - orange means the
+   record still needs its details (SIP instalment), green means executed. */
+tr.row-In-Progress { background: var(--color-warn-soft) !important; }
+tr.row-EXECUTED     { background: var(--color-pass-soft) !important; }
+
+/* #2: Status and Investment Type chips in the bond tables. */
+.chip.status-In-Progress { background: var(--color-warn-soft); color: #7a5a00; border: 1px solid var(--color-warn); }
+.chip.status-EXECUTED    { background: var(--color-pass-soft); color: #0d5c37; border: 1px solid var(--color-pass); }
+.chip.type-SIP-Investment       { background: var(--color-info-soft); color: var(--color-primary); border: 1px solid var(--color-primary); }
+.chip.type-One-Time-Investment  { background: var(--color-neutral-soft); color: var(--color-text); border: 1px solid var(--color-border); }
+
+/* #7: Investment Type on the Bond Details Entry screen - fixed by the server,
+   pill-shaped so it reads as a badge, not an editable field. */
+input.investment-type {
+    border-radius: 999px;
+    padding: 6px 18px;
+    font-weight: 600;
+    background: var(--color-neutral-soft);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    letter-spacing: 0.02em;
+}
+input.investment-type.sip {
+    background: var(--color-info-soft);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+/* #9: short status legend under the Bond Records heading. */
+.status-legend { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; margin: var(--space-2) 0 var(--space-3); }
+.status-legend .chip { font-size: var(--fs-small); }

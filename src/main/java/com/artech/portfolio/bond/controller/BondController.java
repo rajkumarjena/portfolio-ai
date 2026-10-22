@@ -1,5 +1,6 @@
 package com.artech.portfolio.bond.controller;
 
+import com.artech.portfolio.bond.dto.BondPageView;
 import com.artech.portfolio.bond.entity.Bond;
 import com.artech.portfolio.bond.service.BondService;
 import com.artech.portfolio.bond.util.BondConstants;
@@ -34,6 +35,19 @@ public class BondController {
     @GetMapping
     public List<Bond> getAllBonds() {
         return bondService.getAllBonds();
+    }
+
+    /**
+     * BONDBP_V9 #9/#11: one page of the Bond Records screen - section split,
+     * In-Progress-first ordering and pagination all decided on the server.
+     * Optional clientId narrows the scope for ADMIN / SUPERVISOR.
+     */
+    @GetMapping("/records")
+    public BondPageView records(@RequestParam(value = "section", required = false, defaultValue = BondConstants.SECTION_ACTIVE) String section,
+                                @RequestParam(value = "page", required = false, defaultValue = "0") int page,
+                                @RequestParam(value = "size", required = false, defaultValue = "20") int size,
+                                @RequestParam(value = "clientId", required = false) Long clientId) {
+        return bondService.listSection(section, page, size, clientId);
     }
 
     @PutMapping("/{id}")

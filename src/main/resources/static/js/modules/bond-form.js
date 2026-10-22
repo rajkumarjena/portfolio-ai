@@ -19,6 +19,13 @@ if (!bondId && investmentDateInput) {
   investmentDateInput.value = `${year}-${month}-${day}`;
 }
 
+// BONDBP_V9 #6/#7: the fixed Investment Type badge. A direct entry starts as
+// "One Time Investment"; opening a SIP-origin record replaces it with
+// "SIP Transaction" (#8). The server owns the real value either way.
+const investmentTypeInput = document.getElementById('investmentType');
+if (investmentTypeInput && !bondId) investmentTypeInput.value = 'One Time Investment';
+let wasInProgress = false;
+
 let formChanged = false;
 if (form) {
   form.addEventListener('input', () => { formChanged = true; });
@@ -58,6 +65,19 @@ if (bondId && form) {
         const field = form.querySelector(`[name=${key}]`);
         if (field) field.value = bond[key] || '';
       });
+      // BONDBP_V9 #7/#8: SIP-origin records show "SIP Transaction" here, while
+      // the Bond Records list keeps the stored "SIP Investment" wording (#2).
+      if (investmentTypeInput) {
+        const fromSip = bond.investmentType === 'SIP Investment';
+        investmentTypeInput.value = fromSip ? 'SIP Transaction'
+          : (bond.investmentType || 'One Time Investment');
+        investmentTypeInput.classList.toggle('sip', fromSip);
+      }
+      // BONDBP_V9 #4.h/#5: tell the user why this record is open and what
+      // saving does to it.
+      wasInProgress = bond.status === 'In Progress';
+      const sipHint = document.getElementById('sipHint');
+      if (sipHint) sipHint.style.display = wasInProgress ? 'block' : 'none';
       if (bond.cashFlowData && Array.isArray(bond.cashFlowData)) {
         cashFlowData = bond.cashFlowData.map(c => ({...c}));
         renderTable();
@@ -83,14 +103,20 @@ if (form) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(bond)
     })
-    .then(res => {
-      if (res.ok) {
-        alert('Bond saved successfully!');
-        window.location.href = '/bonds/bond-view.html';
-      } else {
-        alert('Failed to save bond.');
+    .then(res => res.json().catch(() => ({})).then(saved => {
+      if (!res.ok) {
+        // BONDBP_V9 #11: the server's actual message lands on the screen.
+        alert(saved.message || 'Failed to save bond (HTTP ' + res.status + ').');
+        return;
       }
-    })
+      // BONDBP_V9 #4.h: completing an In Progress SIP instalment turns it EXECUTED.
+      if (wasInProgress && saved.status === 'EXECUTED') {
+        alert('Bond saved - this SIP instalment is now EXECUTED.');
+      } else {
+        alert('Bond saved successfully!');
+      }
+      window.location.href = '/bonds/bond-view.html';
+    }))
     .catch(err => alert('Error: ' + err));
   });
 }
