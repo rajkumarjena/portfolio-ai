@@ -10,6 +10,10 @@ import java.time.LocalDate;
  * Create Date), SIP Date, SIP Amount, Frequency, Status. The former Actual
  * SIP Amount / Bond Name columns went away with the Bond SIP Transaction
  * screen - instalments are bond rows now, visible on the Bond Records screen.
+ *
+ * BONDBP_V10 #5: Admin/Supervisor see every client's SIPs, so the row also
+ * carries the owning Client (name + PAN) for the extra Client column. It is
+ * null for a regular user's own-only list.
  */
 @Data
 public class BondSipView {
@@ -20,6 +24,8 @@ public class BondSipView {
     private double sipAmount;
     private String frequency;
     private String status;
+    private String clientName;
+    private String clientPan;
 
     public static BondSipView of(BondSip sip) {
         BondSipView view = new BondSipView();
@@ -30,6 +36,10 @@ public class BondSipView {
         view.setSipAmount(sip.getSipAmount());
         view.setFrequency(sip.getFrequency());
         view.setStatus(sip.getStatus());
+        if (sip.getClient() != null) { // lazy-safe: already loaded for the list
+            view.setClientName(sip.getClient().getName());
+            view.setClientPan(sip.getClient().getPan());
+        }
         return view;
     }
 }

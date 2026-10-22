@@ -35,8 +35,9 @@ public class BondSipController {
 
     /** #1: the lean Bond SIP screen list. */
     @GetMapping
-    public List<BondSipView> listMine() {
-        return bondSipService.listMine();
+    public List<BondSipView> listMine(@RequestParam(value = "clientId", required = false) Long clientId,
+                                      @RequestParam(value = "all", required = false, defaultValue = "false") boolean all) {
+        return bondSipService.listMine(clientId, all);
     }
 
     /** BONDBP_V9 #5: the screen's sync banner - "Bond SIP Transaction is OK ..." or the pending count. */
@@ -51,10 +52,11 @@ public class BondSipController {
         return Map.of("executed", bondSipService.runDueSips());
     }
 
-    /** BONDBP_V9 #5: manual Sync Now - create what is missing, then report the banner state. */
+    /** BONDBP_V9 #5 + V10 #1: manual Sync Now - create what is missing, then
+     * report the banner state. ADMIN-only. */
     @PostMapping("/reconcile")
     public Map<String, Object> reconcile() {
-        int created = bondSipService.runDueSips();
+        int created = bondSipService.reconcileForCurrentUser();
         Map<String, Object> status = new java.util.LinkedHashMap<>(bondSipService.syncStatus());
         status.put("created", created);
         return status;

@@ -26,9 +26,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Collectors;
 
 /**
- * BONDBP_V7/V9 - Bond SIP, all rules server-side:
+ * BONDBP_V7/V9/V10 - Bond SIP, all rules server-side:
  *
  *  #2  Issuer / SIP Date / SIP Amount are mandatory; Investment Date (BONDBP_V9
  *      #3, was Create Date) is stamped from the clock (the form field is
@@ -52,6 +54,12 @@ import java.util.Set;
  *  #5  The nightly 00:00 reconcile job, the 00:01 execution, the restart sync
  *      and the manual Sync Now button all share runDueSips(); syncStatus()
  *      powers the screen's "Bond SIP Transaction is OK" banner.
+ *
+ * BONDBP_V10:
+ *  #1  The manual Sync Now button (POST /api/bond-sips/reconcile) is
+ *      ADMIN-only - the scheduler still runs for everyone on its own.
+ *  #5  Admin/Supervisor see every client's Bond SIPs (with a Client column);
+ *      a regular user still sees only their own.
  */
 @Service
 public class BondSipServiceImpl implements BondSipService {
@@ -180,17 +188,57 @@ public class BondSipServiceImpl implements BondSipService {
         return sipFrequency; // no matching config row - keep the readable text
     }
 
-    // ------------------------------------------------------------- #1 list
+    // --------------------------------------------------- #1 list (+ V10 #5)
 
     @Override
     @Transactional(readOnly = true)
-    public List<BondSipView> listMine() {
+    public List<BondSipView> listMine(Long clientIdFilter, boolean all) {
         Client me = currentUserService.requireClient();
+        if (currentUserService.isAdmin() || currentUserService.hasAnyRole("SUPERVISOR")) {
+            if (all) {
+                return bondSipRepository.findAll().stream()
+                        .map(BondSipView::of).toList();
+            }
+            if (clientIdFilter != null) {
+                return bondSipRepository.findByClientIdOrderByIdAsc(clientIdFilter).stream()
+                        .map(BondSipView::of).toList();
+            }
+            // By default for admin/supervisor, show only their own
+            return bondSipRepository.findByClientIdOrderByIdAsc(me.getId())
+                    .stream().map(BondSipView::of).toList();
+        }
         return bondSipRepository.findByClientIdOrderByIdAsc(me.getId())
                 .stream().map(BondSipView::of).toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<BondSipView> listMine(Long clientIdFilter) {
+        return listMine(clientIdFilter, false);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<BondSipView> listMine() {
+        return listMine(null, false);
+    }
+
     // ------------------------------------------- #4/#5 execute + reconcile
+
+    /**
+     * BONDBP_V10 #1: the manual Sync Now button is ADMIN-only - the nightly
+     * 00:00 job, the 00:01 execution and the restart sync call runDueSips()
+     * directly and are unaffected.
+     */
+    @Override
+    @Transactional
+    public int reconcileForCurrentUser() {
+        if (!currentUserService.isAdmin()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Sync Now is available to ADMIN users only");
+        }
+        return runDueSips();
+    }
 
     @Override
     @Transactional

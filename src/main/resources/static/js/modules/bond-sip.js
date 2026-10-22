@@ -1,16 +1,22 @@
-// bond-sip.js - BONDBP_V9 Bond SIP screen: create a lean Bond SIP (#2/#3) and
-// read its server-computed sync banner (#5). Instalments are bond records on
-// the Bond Records screen now - there is no transaction screen any more.
+// bond-sip.js - BONDBP_V9/V10 Bond SIP screen
 (function () {
   'use strict';
 
   const esc = value => String(value == null ? '' : value)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/\"/g, '&quot;');
 
-  const money = n => Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  const money = n => Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 
-  // Local "YYYY-MM-DD" for the disabled Investment Date field (#3).
+  const role = window.APP_USER_ROLE || 'USER';
+  const isAdmin = role === 'ADMIN';
+  const isPrivileged = isAdmin || role === 'SUPERVISOR';
+
+  const HEADERS = ['Issuer', 'Investment Date', 'SIP Date', 'SIP Amount', 'Frequency', 'Status']
+    .concat(isPrivileged ? ['Client'] : []).concat(['Actions']);
+
+  let sipClientFilterId = '';
+
   function todayIso() {
     const d = new Date();
     const pad = v => String(v).padStart(2, '0');
@@ -26,11 +32,10 @@
     if (!el) return;
     el.textContent = message || '';
     el.style.display = message ? 'block' : 'none';
-    el.classList.toggle('error', !ok);
-    el.classList.toggle('info', !!ok);
+    el.classList.toggle('error', ok === false);
+    el.classList.toggle('info', ok === true);
   }
 
-  // BONDBP_V9 #5: green "Bond SIP Transaction is OK" or the pending count.
   function renderSyncStatus(status, ok) {
     const el = document.getElementById('syncBanner');
     if (!el || !status) return;
@@ -49,9 +54,6 @@
       });
   }
 
-  // Issuer is configurable (app_param_config, param name: issuer) - the same
-  // /api/bonds/issuer list the Bond screen uses, served from the App Config
-  // object that refreshes every app.config.refreshRateDuration (15 min).
   function loadIssuers() {
     const select = document.getElementById('issuer');
     if (!select) return;
@@ -68,14 +70,32 @@
     });
   }
 
+  let sipFilterMode = 'me';
+
   function load() {
-    Api.guard(Api.get('/api/bond-sips'), 'Could not load Bond SIPs').then(function (list) {
+    let url = '/api/bond-sips';
+    if (sipFilterMode === 'all') {
+      url += '?all=true';
+    } else if (sipFilterMode && sipFilterMode !== 'me') {
+      url += '?clientId=' + encodeURIComponent(sipFilterMode);
+    }
+    Api.guard(Api.get(url), 'Could not load Bond SIPs').then(function (list) {
       if (!list) return;
+      const head = document.querySelector('#sipList thead');
+      if (head) {
+        head.innerHTML = '<tr>' + HEADERS.map(h => '<th>' + h + '</th>').join('') + '</tr>';
+      }
       const body = tbody();
       if (!body) return;
-      body.innerHTML = list.length ? list.map(s => {
-        const cancellable = s.status === 'CREATED' || s.status === 'INPROGRESS';
-        return `
+      if (!list.length) {
+        body.innerHTML = `<tr><td colspan="${HEADERS.length}" class="muted">No Bond SIPs yet - create one above.</td></tr>`;
+      } else {
+        body.innerHTML = list.map(s => {
+          const cancellable = s.status === 'CREATED' || s.status === 'INPROGRESS';
+          const clientCell = isPrivileged
+            ? `<td class="left">${esc((s.clientName || '') + (s.clientPan ? ' [' + s.clientPan + ']' : '')) || '-'}</td>`
+            : '';
+          return `
         <tr data-id="${s.id}">
           <td>${esc(s.issuer)}</td>
           <td>${esc(s.investmentDate)}</td>
@@ -83,18 +103,55 @@
           <td class="amt">${money(s.sipAmount)}</td>
           <td>${esc(s.frequency)}</td>
           <td><span class="chip">${esc(s.status)}</span></td>
+          ${clientCell}
           <td class="left">${cancellable
             ? '<button type="button" class="btn btn-sm sip-cancel"><i data-lucide="x"></i>Cancel</button>'
             : ''}</td>
         </tr>`;
-      }).join('')
-        : '<tr><td colspan="7" class="muted">No Bond SIPs yet - create one above.</td></tr>';
+        }).join('');
+      }
       if (window.App && window.App.renderIcons) window.App.renderIcons();
     });
   }
 
+  function populateSipClientFilter() {
+    if (!isPrivileged) return;
+    const wrapper = document.getElementById('sipClientFilterWrapper');
+    const select = document.getElementById('sipFilterClients');
+    const btn = document.getElementById('sipFilterBtn');
+    if (!wrapper || !select) return;
+    Api.guard(Api.get('/api/clients'), 'Could not load clients').then(clients => {
+      if (!clients) return;
+      // clear existing options except first two
+      while (select.options.length > 2) {
+        select.remove(2);
+      }
+      clients.forEach(c => {
+        if (!c || c.id == null) return;
+        // skip if it's the current user? not necessary
+        const option = document.createElement('option');
+        option.value = c.id;
+        option.textContent = (c.name || '') + (c.pan ? ' [' + c.pan + ']' : '');
+        select.appendChild(option);
+      });
+      wrapper.style.display = 'flex';
+      wrapper.style.alignItems = 'center';
+      wrapper.style.gap = '6px';
+    });
+    if (btn) {
+      btn.onclick = function () {
+        const selectEl = document.getElementById('sipFilterClients');
+        sipFilterMode = selectEl && selectEl.value ? selectEl.value : 'me';
+        load();
+      };
+    }
+    select.onchange = function () {
+      sipFilterMode = select.value || 'me';
+      load();
+    };
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
-    // #3: Investment Date auto-populates to the current date and is disabled.
     const investmentDate = document.getElementById('investmentDate');
     if (investmentDate) investmentDate.value = todayIso();
 
@@ -122,6 +179,7 @@
     }
 
     loadIssuers();
+    populateSipClientFilter();
     load();
     loadSyncStatus();
 
@@ -144,9 +202,11 @@
       });
     }
 
-    // BONDBP_V9 #5: manual Sync Now - same idempotent job the scheduler runs.
     const syncBtn = document.getElementById('syncBtn');
-    if (syncBtn) {
+    if (syncBtn && !isAdmin) {
+      syncBtn.hidden = true;
+    }
+    if (syncBtn && isAdmin) {
       syncBtn.addEventListener('click', function () {
         syncBtn.disabled = true;
         banner('');

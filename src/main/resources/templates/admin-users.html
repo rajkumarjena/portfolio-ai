@@ -1,20 +1,22 @@
 <!DOCTYPE html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{layout :: page('User Roles', ~{:: #content}, ~{:: #scripts})}">
+      th:replace="~{layout :: page('Client Roles', ~{:: #content}, ~{:: #scripts})}">
 <body>
 <main id="content" th:fragment="content" class="content">
-    <h1>User Role Management</h1>
+    <h1>Client Role Management</h1>
 
-    <div class="note">Admins can elevate any user to <strong>SUPERVISOR</strong> or <strong>ADMIN</strong>,
-        or move them back to <strong>USER</strong>. You cannot change your own role here.</div>
+    <div class="note">Admins can elevate any client to <strong>SUPERVISOR</strong> or <strong>ADMIN</strong>,
+        or move them back to <strong>USER</strong>, and set each client account's status
+        (<strong>ACTIVE</strong> / <strong>HOLD</strong> / <strong>CANCELLED</strong>). You cannot change your own
+        role or status here - HOLD blocks login and CANCELLED cannot be undone.</div>
 
     <div id="feedback"></div>
 
     <table class="data-table" id="userTable">
         <thead>
         <tr>
-            <th>Name</th><th>PAN</th><th>Emails</th><th>Current Role</th><th>Status</th>
-            <th>Failed Logins</th><th>Elevate To</th><th>Action</th>
+            <th>Name</th><th>PAN</th><th>Emails</th><th>Current Role</th><th>Lock Status</th>
+            <th>Failed Logins</th><th>Elevate To</th><th>Actions</th>
         </tr>
         </thead>
         <tbody></tbody>

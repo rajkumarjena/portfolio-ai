@@ -52,14 +52,8 @@ public class BondServiceImpl implements BondService {
 
     @Override
     public Bond updateBond(Long id, Bond bondDetails) {
-        // BONDBP A.6: a normal USER only has view access; editing is for
-        // SUPERVISOR (own bonds) and ADMIN (everything). Enforced here, not
-        // just in the UI, so the role ladder holds over the API too (AUTH.md d).
-        if (!currentUserService.hasAnyRole(ClientConstants.ROLE_SUPERVISOR,
-                ClientConstants.ROLE_ADMIN)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "Your role does not allow editing bonds");
-        }
+        // BONDBP_V10 #2: Edit activated for all users on Active Bonds.
+        // Ownership and non-matured rules are still enforced.
         return loadOwned(id).map(bond -> {
             // BONDBP_V9 #10: a matured record is history - only its details may
             // be viewed, never edited (or deleted).
@@ -111,11 +105,7 @@ public class BondServiceImpl implements BondService {
 
     @Override
     public void deleteBond(Long id) {
-        // BONDBP A.5: delete is an ADMIN-only action.
-        if (!currentUserService.isAdmin()) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "Only an administrator can delete bonds");
-        }
+        // BONDBP_V10 #2: Delete activated for all users on Active Bonds.
         Bond bond = loadOwned(id)
                 .orElseThrow(() -> new RuntimeException("Bond not found with id " + id));
         // BONDBP_V9 #10: matured records are permanent history - view only.

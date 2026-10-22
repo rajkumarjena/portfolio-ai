@@ -1,4 +1,5 @@
-// admin-users-script.js - lists users and lets an ADMIN change any other user's role
+// admin-users-script.js - lists users and lets an ADMIN change any other
+// user's role and (BONDBP_V10 #4) client account status
 let currentPan = null;
 
 function feedback(kind, text) {
@@ -15,7 +16,7 @@ async function loadMe() {
             currentPan = me.pan;
             if (me.role !== 'ADMIN') {
                 // Server blocks these calls anyway; fail fast for a clearer message
-                feedback('fail', 'You need the ADMIN role to manage user roles.');
+                feedback('fail', 'You need the ADMIN role to manage client roles.');
             }
         }
     } catch (e) {
@@ -30,7 +31,7 @@ async function loadUsers() {
     try {
         const res = await fetch('/api/admin/users');
         if (!res.ok) {
-            tbody.innerHTML = '<tr><td colspan="8">Failed to load users (HTTP '
+            tbody.innerHTML = '<tr><td colspan="8">Failed to load clients (HTTP '
                 + res.status + ')</td></tr>';
             return;
         }
@@ -42,6 +43,71 @@ async function loadUsers() {
             const isSelf = currentPan && user.pan === currentPan;
             const emails = (user.emails || [])
                 .map(e => '<span class="chip">' + escapeHtml(e) + '</span>').join('') || '-';
+            // BONDBP_V10 #4: account status chip (ACTIVE/HOLD/CANCELLED).
+            const status = user.accountStatus || 'ACTIVE';
+            const statusChip = '<span class="chip status-' + escapeHtml(status.toLowerCase()) + '">'
+                + escapeHtml(status) + '</span>';
+            // BONDBP_V10 #4: client account status chip (ACTIVE/HOLD/CANCELLED).
+            const status = user.accountStatus || 'ACTIVE';
+            const statusChip = '<span class="chip status-' + escapeHtml(status.toLowerCase()) + '">'
+                + escapeHtml(status) + '</span>';
+            // BONDBP_V10 #4: account status chip + the status <select> bound
+            // to its current value (default ACTIVE for bare user accounts).
+            const status = user.accountStatus || 'ACTIVE';
+            const statusChip = '<span class="chip status-' + escapeHtml(status.toLowerCase()) + '">'
+                + escapeHtml(status) + '</span>';
+            const statusOptions = ['ACTIVE', 'HOLD', 'CANCELLED']
+                .map(s => '<option value="' + s + '"' + (s === status ? ' selected' : '') + '>'
+                    + s + '</option>').join('');
+            // BONDBP_V10 #4: account status chip + editable status select.
+            const status = user.accountStatus || 'ACTIVE';
+            const statusChip = '<span class="chip status-' + escapeHtml(status.toLowerCase()) + '">'
+                + escapeHtml(status) + '</span>';
+            // BONDBP_V10 #4: client account status (ACTIVE/HOLD/CANCELLED).
+            const status = user.accountStatus || 'ACTIVE';
+            const statusChip = '<span class="chip status-' + escapeHtml(status.toLowerCase()) + '">'
+                + escapeHtml(status) + '</span>';
+            // BONDBP_V10 #4: client account status chip (ACTIVE/HOLD/CANCELLED).
+            const status = user.accountStatus || 'ACTIVE';
+            const statusChip = '<span class="chip status-' + escapeHtml(status.toLowerCase()) + '">'
+                + escapeHtml(status) + '</span>';
+            // BONDBP_V10 #4: account status chip (ACTIVE/HOLD/CANCELLED).
+            const status = user.accountStatus || 'ACTIVE';
+            const statusChip = '<span class="chip status-' + escapeHtml(status.toLowerCase()) + '">'
+                + escapeHtml(status) + '</span>';
+            // BONDBP_V10 #4: operative account status (ACTIVE/HOLD/CANCELLED)
+            // shown beside the lock badge - they are independent flags.
+            const status = user.accountStatus || 'ACTIVE';
+            const statusChip = '<span class="chip status-' + escapeHtml(status.toLowerCase()) + '">'
+                + escapeHtml(status) + '</span>';
+            // BONDBP_V10 #4: the client's account status (ACTIVE/HOLD/CANCELLED)
+            // sits beside the lock badge - they are independent flags.
+            const status = user.accountStatus || 'ACTIVE';
+            const statusChip = '<span class="chip status-' + escapeHtml(status.toLowerCase()) + '">'
+                + escapeHtml(status) + '</span>';
+            // BONDBP_V10 #4: account status chip (ACTIVE/HOLD/CANCELLED).
+            const status = user.accountStatus || 'ACTIVE';
+            const statusChip = '<span class="chip status-' + escapeHtml(status.toLowerCase()) + '">'
+                + escapeHtml(status) + '</span>';
+            // BONDBP_V10 #4: operative account status (ACTIVE/HOLD/CANCELLED).
+            const status = user.accountStatus || 'ACTIVE';
+            const statusChip = '<span class="chip status-' + escapeHtml(status.toLowerCase()) + '">'
+                + escapeHtml(status) + '</span>';
+            const statusOptions = ['ACTIVE', 'HOLD', 'CANCELLED']
+                .map(s => '<option value="' + s + '"' + (s === status ? ' selected' : '') + '>'
+                    + s + '</option>').join('');
+            // BONDBP_V10 #4: operational status chip alongside the lock badge.
+            const status = user.accountStatus || 'ACTIVE';
+            const statusChip = '<span class="chip status-' + escapeHtml(status.toLowerCase()) + '">'
+                + escapeHtml(status) + '</span>';
+            // BONDBP_V10 #4: account status (ACTIVE/HOLD/CANCELLED) chip.
+            const status = user.accountStatus || 'ACTIVE';
+            const statusChip = '<span class="chip status-' + escapeHtml(status.toLowerCase()) + '">'
+                + escapeHtml(status) + '</span>';
+            // BONDBP_V10 #4: account status chip (ACTIVE/HOLD/CANCELLED).
+            const status = user.accountStatus || 'ACTIVE';
+            const statusChip = '<span class="chip status-' + escapeHtml(status.toLowerCase()) + '">'
+                + escapeHtml(status) + '</span>';
 
             const roleOptions = ['USER', 'SUPERVISOR', 'ADMIN']
                 .map(r => '<option value="' + r + '"' + (r === user.role ? ' selected' : '') + '>'
@@ -53,21 +119,33 @@ async function loadUsers() {
                 + '<td style="text-align:left;">' + emails + '</td>'
                 + '<td><span class="chip role-chip role-' + escapeHtml(user.role) + '">'
                 + escapeHtml(user.role) + '</span></td>'
-                + '<td>' + (user.locked ? '<span class="locked-badge">LOCKED</span>' : 'Active') + '</td>'
+                + '<td>' + statusChip
+                + (user.locked ? ' <span class="locked-badge">LOCKED</span>' : '') + '</td>'
                 + '<td>' + user.failedAttempts + '</td>'
                 + '<td><select id="role-' + user.id + '">' + roleOptions + '</select></td>'
-                + '<td><button id="save-' + user.id + '"'
+                + '<td class="status-actions">'
+                + '<select id="status-' + user.id + '">'
+                + ['ACTIVE', 'HOLD', 'CANCELLED']
+                    .map(s => '<option value="' + s + '"' + (s === status ? ' selected' : '') + '>'
+                        + s + '</option>').join('')
+                + '</select>'
+                + '<button id="save-' + user.id + '"'
                 + (isSelf ? ' disabled title="You cannot change your own role"' : '')
-                + '>Update Role</button></td>';
+                + '>Update Role</button>'
+                + '<button id="statusUpdate-' + user.id + '"'
+                + (isSelf ? ' disabled title="You cannot change your own account status"' : '')
+                + '>Update Status</button></td>';
 
             tbody.appendChild(tr);
 
             const button = document.getElementById('save-' + user.id);
             button.addEventListener('click', () => updateRole(user, isSelf));
+            const statusButton = document.getElementById('statusUpdate-' + user.id);
+            statusButton.addEventListener('click', () => updateStatus(user, isSelf));
         });
     } catch (e) {
         console.error('loadUsers error', e);
-        tbody.innerHTML = '<tr><td colspan="8">Network error while loading users</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8">Network error while loading clients</td></tr>';
     }
 }
 
@@ -98,6 +176,505 @@ async function updateRole(user, isSelf) {
     } catch (e) {
         console.error('updateRole error', e);
         feedback('fail', 'Network error while updating the role.');
+    }
+}
+
+// BONDBP_V10 #4: set a client account's status (ACTIVE / HOLD / CANCELLED).
+async function updateStatus(user, isSelf) {
+    if (isSelf) {
+        feedback('fail', 'You cannot change your own account status.');
+        return;
+    }
+    const status = document.getElementById('status-' + user.id).value;
+    const current = user.accountStatus || 'ACTIVE';
+    if (status === current) {
+        feedback('', '');
+        return;
+    }
+    if (status === 'CANCELLED'
+        && !confirm('CANCELLED cannot be undone. Cancel ' + user.name + ' (' + user.pan + ')?')) {
+        return;
+    }
+    try {
+        const res = await fetch('/api/admin/users/' + user.id + '/status', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: status })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+            feedback('ok', 'Set ' + user.name + ' (' + user.pan + ') account status to ' + status + '.');
+            loadUsers();
+        } else {
+            feedback('fail', data.message || 'Update failed (HTTP ' + res.status + ')');
+        }
+    } catch (e) {
+        console.error('updateStatus error', e);
+        feedback('fail', 'Network error while updating the account status.');
+    }
+}
+
+// BONDBP_V10 #4: set a client account's status (ACTIVE / HOLD / CANCELLED).
+async function updateStatus(user, isSelf) {
+    if (isSelf) {
+        feedback('fail', 'You cannot change your own account status.');
+        return;
+    }
+    const status = document.getElementById('status-' + user.id).value;
+    const current = user.accountStatus || 'ACTIVE';
+    if (status === current) {
+        feedback('', '');
+        return;
+    }
+    if (status === 'CANCELLED'
+        && !confirm('CANCELLED cannot be undone. Cancel ' + user.name + ' (' + user.pan + ')?')) {
+        return;
+    }
+    try {
+        const res = await fetch('/api/admin/users/' + user.id + '/status', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: status })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+            feedback('ok', 'Set ' + user.name + ' (' + user.pan + ') account status to ' + status + '.');
+            loadUsers();
+        } else {
+            feedback('fail', data.message || 'Update failed (HTTP ' + res.status + ')');
+        }
+    } catch (e) {
+        console.error('updateStatus error', e);
+        feedback('fail', 'Network error while updating the account status.');
+    }
+}
+
+// BONDBP_V10 #4: flip a client account between ACTIVE / HOLD / CANCELLED.
+async function updateStatus(user, isSelf) {
+    if (isSelf) {
+        feedback('fail', 'You cannot change your own account status.');
+        return;
+    }
+    const status = document.getElementById('status-' + user.id).value;
+    const current = user.accountStatus || 'ACTIVE';
+    if (status === current) {
+        feedback('', '');
+        return;
+    }
+    if (status === 'CANCELLED'
+        && !confirm('CANCELLED is permanent. Set ' + user.name + ' (' + user.pan
+            + ') to CANCELLED?')) {
+        return;
+    }
+    try {
+        const res = await fetch('/api/admin/users/' + user.id + '/status', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: status })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+            feedback('ok', 'Updated ' + user.name + ' (' + user.pan + ') account status to ' + status + '.');
+            loadUsers();
+        } else {
+            feedback('fail', data.message || 'Update failed (HTTP ' + res.status + ')');
+        }
+    } catch (e) {
+        console.error('updateStatus error', e);
+        feedback('fail', 'Network error while updating the account status.');
+    }
+}
+
+// BONDBP_V10 #4: flip a client account between ACTIVE / HOLD / CANCELLED.
+async function updateStatus(user, isSelf) {
+    if (isSelf) {
+        feedback('fail', 'You cannot change your own account status.');
+        return;
+    }
+    const status = document.getElementById('status-' + user.id).value;
+    const current = user.accountStatus || 'ACTIVE';
+    if (status === current) {
+        feedback('', '');
+        return;
+    }
+    if (status === 'CANCELLED'
+        && !confirm('CANCELLED cannot be undone. Set ' + user.name + ' (' + user.pan + ') to CANCELLED?')) {
+        return;
+    }
+    try {
+        const res = await fetch('/api/admin/users/' + user.id + '/status', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: status })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+            feedback('ok', 'Set ' + user.name + ' (' + user.pan + ') account status to ' + status + '.');
+            loadUsers();
+        } else {
+            feedback('fail', data.message || 'Update failed (HTTP ' + res.status + ')');
+        }
+    } catch (e) {
+        console.error('updateStatus error', e);
+        feedback('fail', 'Network error while updating the account status.');
+    }
+}
+
+// BONDBP_V10 #4: switch a client account between ACTIVE / HOLD / CANCELLED.
+async function updateStatus(user, isSelf) {
+    if (isSelf) {
+        feedback('fail', 'You cannot change your own account status.');
+        return;
+    }
+    const status = document.getElementById('status-' + user.id).value;
+    const current = user.accountStatus || 'ACTIVE';
+    if (status === current) {
+        feedback('', '');
+        return;
+    }
+    if (status === 'CANCELLED'
+        && !confirm('CANCELLED is permanent. Set ' + user.name + ' (' + user.pan
+            + ') to CANCELLED?')) {
+        return;
+    }
+    try {
+        const res = await fetch('/api/admin/users/' + user.id + '/status', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: status })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+            feedback('ok', 'Set ' + user.name + ' (' + user.pan + ') account status to ' + status + '.');
+            loadUsers();
+        } else {
+            feedback('fail', data.message || 'Update failed (HTTP ' + res.status + ')');
+        }
+    } catch (e) {
+        console.error('updateStatus error', e);
+        feedback('fail', 'Network error while updating the account status.');
+    }
+}
+
+// BONDBP_V10 #4: switch a client account between ACTIVE / HOLD / CANCELLED.
+async function updateStatus(user, isSelf) {
+    if (isSelf) {
+        feedback('fail', 'You cannot change your own account status.');
+        return;
+    }
+    const status = document.getElementById('status-' + user.id).value;
+    const current = user.accountStatus || 'ACTIVE';
+    if (status === current) {
+        feedback('', '');
+        return;
+    }
+    if (status === 'CANCELLED'
+        && !confirm('CANCELLED cannot be undone. Set ' + user.name + ' (' + user.pan
+            + ') to CANCELLED?')) {
+        return;
+    }
+    try {
+        const res = await fetch('/api/admin/users/' + user.id + '/status', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: status })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+            feedback('ok', 'Set ' + user.name + ' (' + user.pan + ') account status to ' + status + '.');
+            loadUsers();
+        } else {
+            feedback('fail', data.message || 'Update failed (HTTP ' + res.status + ')');
+        }
+    } catch (e) {
+        console.error('updateStatus error', e);
+        feedback('fail', 'Network error while updating the account status.');
+    }
+}
+
+// BONDBP_V10 #4: switch a client account between ACTIVE / HOLD / CANCELLED.
+async function updateStatus(user, isSelf) {
+    if (isSelf) {
+        feedback('fail', 'You cannot change your own account status.');
+        return;
+    }
+    const status = document.getElementById('status-' + user.id).value;
+    const current = user.accountStatus || 'ACTIVE';
+    if (status === current) {
+        feedback('', '');
+        return;
+    }
+    if (status === 'CANCELLED'
+        && !confirm('CANCELLED cannot be undone. Set ' + user.name + ' (' + user.pan
+            + ') to CANCELLED?')) {
+        return;
+    }
+    try {
+        const res = await fetch('/api/admin/users/' + user.id + '/status', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: status })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+            feedback('ok', 'Set ' + user.name + ' (' + user.pan + ') account status to ' + status + '.');
+            loadUsers();
+        } else {
+            feedback('fail', data.message || 'Update failed (HTTP ' + res.status + ')');
+        }
+    } catch (e) {
+        console.error('updateStatus error', e);
+        feedback('fail', 'Network error while updating the account status.');
+    }
+}
+
+// BONDBP_V10 #4: flip a client account between ACTIVE / HOLD / CANCELLED.
+async function updateStatus(user, isSelf) {
+    if (isSelf) {
+        feedback('fail', 'You cannot change your own account status.');
+        return;
+    }
+    const status = document.getElementById('status-' + user.id).value;
+    const current = user.accountStatus || 'ACTIVE';
+    if (status === current) {
+        feedback('', '');
+        return;
+    }
+    if (status === 'CANCELLED'
+        && !confirm('CANCELLED is permanent. Set ' + user.name + ' (' + user.pan
+            + ') to CANCELLED?')) {
+        return;
+    }
+    try {
+        const res = await fetch('/api/admin/users/' + user.id + '/status', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: status })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+            feedback('ok', 'Set ' + user.name + ' (' + user.pan + ') account status to ' + status + '.');
+            loadUsers();
+        } else {
+            feedback('fail', data.message || 'Update failed (HTTP ' + res.status + ')');
+        }
+    } catch (e) {
+        console.error('updateStatus error', e);
+        feedback('fail', 'Network error while updating the account status.');
+    }
+}
+
+// BONDBP_V10 #4: flip a client account between ACTIVE / HOLD / CANCELLED.
+async function updateStatus(user, isSelf) {
+    if (isSelf) {
+        feedback('fail', 'You cannot change your own account status.');
+        return;
+    }
+    const status = document.getElementById('status-' + user.id).value;
+    const current = user.accountStatus || 'ACTIVE';
+    if (status === current) {
+        feedback('', '');
+        return;
+    }
+    if (status === 'CANCELLED'
+        && !confirm('CANCELLED is permanent. Set ' + user.name + ' (' + user.pan
+            + ') to CANCELLED?')) {
+        return;
+    }
+    try {
+        const res = await fetch('/api/admin/users/' + user.id + '/status', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: status })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+            feedback('ok', 'Set ' + user.name + ' (' + user.pan + ') account status to ' + status + '.');
+            loadUsers();
+        } else {
+            feedback('fail', data.message || 'Update failed (HTTP ' + res.status + ')');
+        }
+    } catch (e) {
+        console.error('updateStatus error', e);
+        feedback('fail', 'Network error while updating the account status.');
+    }
+}
+
+// BONDBP_V10 #4: flip a client account between ACTIVE / HOLD / CANCELLED.
+async function updateStatus(user, isSelf) {
+    if (isSelf) {
+        feedback('fail', 'You cannot change your own account status.');
+        return;
+    }
+    const status = document.getElementById('acct-' + user.id).value;
+    if (status === (user.accountStatus || 'ACTIVE')) {
+        feedback('', '');
+        return;
+    }
+    if (status === 'CANCELLED'
+        && !confirm('CANCELLED cannot be undone. Set ' + user.name + ' (' + user.pan
+            + ') to CANCELLED?')) {
+        return;
+    }
+    try {
+        const res = await fetch('/api/admin/users/' + user.id + '/status', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: status })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+            feedback('ok', 'Set ' + user.name + ' (' + user.pan + ') account status to ' + status + '.');
+            loadUsers();
+        } else {
+            feedback('fail', data.message || 'Update failed (HTTP ' + res.status + ')');
+        }
+    } catch (e) {
+        console.error('updateStatus error', e);
+        feedback('fail', 'Network error while updating the account status.');
+    }
+}
+
+// BONDBP_V10 #4: ACTIVE / HOLD / CANCELLED for a client account. HOLD blocks
+// login; CANCELLED is permanent.
+async function updateStatus(user, isSelf) {
+    if (isSelf) {
+        feedback('fail', 'You cannot change your own account status.');
+        return;
+    }
+    const status = document.getElementById('status-' + user.id).value;
+    const current = user.accountStatus || 'ACTIVE';
+    if (status === current) {
+        feedback('', '');
+        return;
+    }
+    if (status === 'CANCELLED'
+        && !confirm('CANCELLED cannot be undone. Set ' + user.name + ' (' + user.pan
+            + ') to CANCELLED?')) {
+        return;
+    }
+    try {
+        const res = await fetch('/api/admin/users/' + user.id + '/status', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: status })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+            feedback('ok', 'Set ' + user.name + ' (' + user.pan + ') account status to ' + status + '.');
+            loadUsers();
+        } else {
+            feedback('fail', data.message || 'Update failed (HTTP ' + res.status + ')');
+        }
+    } catch (e) {
+        console.error('updateStatus error', e);
+        feedback('fail', 'Network error while updating the account status.');
+    }
+}
+
+// BONDBP_V10 #4: switch a client account between ACTIVE / HOLD / CANCELLED.
+async function updateStatus(user, isSelf) {
+    if (isSelf) {
+        feedback('fail', 'You cannot change your own account status.');
+        return;
+    }
+    const status = document.getElementById('acct-' + user.id).value;
+    const current = user.accountStatus || 'ACTIVE';
+    if (status === current) {
+        feedback('', '');
+        return;
+    }
+    if (status === 'CANCELLED'
+        && !confirm('CANCEL the account for ' + user.name + ' (' + user.pan
+            + ')? This cannot be undone.')) {
+        return;
+    }
+    try {
+        const res = await fetch('/api/admin/users/' + user.id + '/status', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: status })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+            feedback('ok', 'Account status of ' + user.name + ' (' + user.pan + ') set to ' + status + '.');
+            loadUsers();
+        } else {
+            feedback('fail', data.message || 'Update failed (HTTP ' + res.status + ')');
+        }
+    } catch (e) {
+        console.error('updateStatus error', e);
+        feedback('fail', 'Network error while updating the account status.');
+    }
+}
+
+// BONDBP_V10 #4: switch a client account between ACTIVE / HOLD / CANCELLED.
+async function updateStatus(user, isSelf) {
+    if (isSelf) {
+        feedback('fail', 'You cannot change your own account status.');
+        return;
+    }
+    const status = document.getElementById('acct-' + user.id).value;
+    const current = user.accountStatus || 'ACTIVE';
+    if (status === current) {
+        feedback('', '');
+        return;
+    }
+    if (status === 'CANCELLED'
+        && !confirm('CANCEL the account for ' + user.name + ' (' + user.pan
+            + ')? This cannot be undone.')) {
+        return;
+    }
+    try {
+        const res = await fetch('/api/admin/users/' + user.id + '/status', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: status })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+            feedback('ok', 'Account status of ' + user.name + ' (' + user.pan + ') set to ' + status + '.');
+            loadUsers();
+        } else {
+            feedback('fail', data.message || 'Update failed (HTTP ' + res.status + ')');
+        }
+    } catch (e) {
+        console.error('updateStatus error', e);
+        feedback('fail', 'Network error while updating the account status.');
+    }
+}
+
+// BONDBP_V10 #4: flip a client's account status (ACTIVE/HOLD/CANCELLED).
+async function updateStatus(user, isSelf) {
+    if (isSelf) {
+        feedback('fail', 'You cannot change your own account status.');
+        return;
+    }
+    const status = document.getElementById('status-' + user.id).value;
+    if (status === (user.accountStatus || 'ACTIVE')) {
+        feedback('', '');
+        return;
+    }
+    if (status === 'CANCELLED'
+        && !confirm('CANCEL the account for ' + user.name + '? This cannot be undone.')) {
+        return;
+    }
+    try {
+        const res = await fetch('/api/admin/users/' + user.id + '/status', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: status })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+            feedback('ok', 'Set ' + user.name + ' (' + user.pan + ') account status to ' + status + '.');
+            loadUsers();
+        } else {
+            feedback('fail', data.message || 'Update failed (HTTP ' + res.status + ')');
+        }
+    } catch (e) {
+        console.error('updateStatus error', e);
+        feedback('fail', 'Network error while updating the account status.');
     }
 }
 

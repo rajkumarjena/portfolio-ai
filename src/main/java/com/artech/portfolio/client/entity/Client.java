@@ -35,6 +35,11 @@ public class Client {
     @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     private String role = ClientConstants.ROLE_USER;
 
+    // BONDBP_V10 #4: account status - ACTIVE by default; HOLD blocks login,
+    // CANCELLED blocks login permanently
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    private String status = ClientConstants.STATUS_ACTIVE;
+
     // Brute-force protection (AUTH.md g): consecutive failed logins and lock expiry (epoch millis)
     // columnDefinition matters: SQLite refuses ALTER TABLE ADD COLUMN of a NOT NULL
     // column without a default, so the DDL must carry "default 0" explicitly.

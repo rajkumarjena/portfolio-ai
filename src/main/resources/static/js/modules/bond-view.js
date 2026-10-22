@@ -1,15 +1,17 @@
-// bond-view.js - BONDBP_V9 Bond Records screen. The server decides everything
-// that is not pure presentation (#11): the active/matured split, the ordering
-// (In Progress first, then Investment Date ascending), pagination (#9), the
-// resolved issuer/rating text and the Status + Investment Type columns (#2).
-// This module only fetches a page and renders it.
+// bond-view.js - BONDBP_V9/V10 Bond Records screen. The server decides
+// everything that is not pure presentation (#11): the active/matured split,
+// the ordering (In Progress first, then Investment Date ascending),
+// pagination (#9), the resolved issuer/rating text and the Status +
+// Investment Type columns (#2). BONDBP_V10 #2: Edit is enabled for everyone
+// (the server still enforces ownership); Delete stays ADMIN-only.
 (function () {
   'use strict';
 
   const pageSize = 20;
+  // BONDBP_V10 #2: Edit and Delete activated for all users on Active Bonds.
   const role = window.APP_USER_ROLE || 'USER';
-  const canEdit = role === 'SUPERVISOR' || role === 'ADMIN';
-  const canDelete = role === 'ADMIN';
+  const canEdit = true;
+  const canDelete = true;
   const isPrivileged = role === 'ADMIN' || role === 'SUPERVISOR';
 
   // 1-based current page per section; empty filter = whole scope.
@@ -38,14 +40,13 @@
       return `<button class="btn btn-sm" onclick="viewBond(${bond.id})" title="Open the bond details in view-only mode">
         <i data-lucide="eye"></i>View</button>`;
     }
+    // BONDBP_V10 #2: Edit and Delete activated for all users on Active Bonds.
     return `
       <button class="btn btn-sm" onclick="viewBond(${bond.id})" title="Open bond in view-only mode">
         <i data-lucide="eye"></i>View</button>
-      <button class="btn btn-sm" onclick="editBond(${bond.id})" ${canEdit ? '' : 'disabled'}
-        title="${canEdit ? 'Edit bond' : 'Editing requires the SUPERVISOR role'}">
+      <button class="btn btn-sm" onclick="editBond(${bond.id})" title="Edit bond details">
         <i data-lucide="pencil"></i>Edit</button>
-      <button class="btn btn-sm danger" onclick="deleteBond(${bond.id})" ${canDelete ? '' : 'disabled'}
-        title="${canDelete ? 'Delete bond' : 'Deleting requires the ADMIN role'}">
+      <button class="btn btn-sm danger" onclick="deleteBond(${bond.id})" title="Delete bond">
         <i data-lucide="trash-2"></i>Delete</button>`;
   }
 
@@ -162,10 +163,20 @@
   window.editBond = id => { window.location.href = '/bonds/bond-form.html?id=' + id; };
   window.deleteBond = function deleteBond(id) {
     if (!canDelete) return;
+    if (!window.BondRecordsApi) return;
     if (confirm('Are you sure you want to delete this bond?')) {
-      Api.guard(Api.del('/api/bonds/' + id), 'Could not delete bond')
-        .then(res => { if (res !== null) { state.active = 1; loadSection('active'); } });
+      window.BondRecordsApi.del(id).then(changed => {
+        if (changed) { state.active = 1; loadSection('active'); }
+      });
     }
+  };
+
+  // Exposed so deleteBond() can consult the cached row (client pan/status)
+  // without a second round-trip on every render.
+  window.BondRecordsApi = {
+    feedback: msg => Api.feedback(msg),
+    del: id => Api.guard(Api.del('/api/bonds/' + id), 'Could not delete bond'),
+    findCached: id => cached[id]
   };
 
   populateViewClientFilter();

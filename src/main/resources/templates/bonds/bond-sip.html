@@ -91,14 +91,24 @@
     </div>
 
     <h2>Bond SIPs</h2>
-    <div class="nav-buttons" style="justify-content:flex-start;margin-top:0;">
-        <button type="button" id="syncBtn" class="btn"><i data-lucide="refresh-cw"></i>Sync Now</button>
+    <div class="nav-buttons" style="justify-content: space-between; align-items: center; margin-top:0;">
+        <div th:if="${currentUser != null and currentUser.admin}">
+            <button type="button" id="syncBtn" class="btn"><i data-lucide="refresh-cw"></i>Sync Now</button>
+        </div>
+        <div id="sipClientFilterWrapper" style="display:none;">
+            <label for="sipFilterClients">Client:</label>
+            <select id="sipFilterClients">
+                <option value="me" selected>My SIPs</option>
+                <option value="all">All Clients</option>
+            </select>
+            <button class="btn" type="button" id="sipFilterBtn"><i data-lucide="filter"></i>Filter</button>
+        </div>
     </div>
     <table class="data-table" id="sipList">
         <thead>
         <tr>
             <th>Issuer</th><th>Investment Date</th><th>SIP Date</th><th>SIP Amount</th>
-            <th>Frequency</th><th>Status</th><th>Actions</th>
+            <th>Frequency</th><th>Status</th><th id="sipClientCol" style="display:none;">Client</th><th>Actions</th>
         </tr>
         </thead>
         <tbody></tbody>

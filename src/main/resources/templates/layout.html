@@ -65,7 +65,7 @@
             <a th:href="@{/app-client-view.html}" class="nav-link"><i data-lucide="users"></i>View Clients</a>
             <a th:href="@{/app-param-config.html}" class="nav-link"><i data-lucide="sliders-horizontal"></i>App Parameters</a>
             <a th:href="@{/admin-users.html}" class="nav-link" th:if="${currentUser != null and currentUser.admin}">
-                <i data-lucide="shield-check"></i>Manage Users</a>
+                <i data-lucide="shield-check"></i>Manage Clients</a>
             <a th:href="@{/admin-db-backup.html}" class="nav-link" th:if="${currentUser != null and currentUser.admin}">
                 <i data-lucide="database-backup"></i>Database Backup</a>
             <a th:href="@{/admin-db-query.html}" class="nav-link" th:if="${currentUser != null and currentUser.admin}">
