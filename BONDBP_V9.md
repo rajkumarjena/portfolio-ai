@@ -1,7 +1,0 @@
-1. Add two columns in bond table called Status and 'Investment Type'. Add 'Investment Type' as label and its value as  "One Time Investtment" in the right top corner in 'Bond Entry Details" UI for new entry of bond. When User save new Bond Entry in bond table, the status should saved as Executed if Payment Schedule Management is created for the bond else status should be 'Created'
-2. The Investment type attribut is a disable field in right top corner in 'Bond Details Entry' UI should be "One Time Investment" for new bond entry.
-3. In 'View Bonds' -> 'Bond Records' UI, add two column called 'status' and 'investment type' and populate its value from bond table.
-4. In 'View Bonds' -> 'Bond Records' UI, remove edit and delete button from the 'Expired / Matured' table for all except ADMIN role user.
-5. In 'Bond SIP' -> 'Bond SIP' screen change label from 'Create Date' to 'Investment Date' also alter its underlying table column name to Investment Date.
-6. Delete Bond SIP Transaction process, its UI and underlying code and entity table. Different process will be develop to handle it in next md file.
-7. Auto scheduling process was created for Bond SIP, remove those process and delete its corresponding code.
