@@ -34,6 +34,18 @@ public class LoginSuccessHandler implements AuthenticationSuccessHandler {
         List<Client> clients = clientRepository.findByPan(pan);
         if (!clients.isEmpty()) {
             Client client = clients.get(0);
+            // BONDBP_V10 #4: block HOLD/CANCELLED
+            String status = client.getStatus() == null ? com.artech.portfolio.client.util.ClientConstants.STATUS_ACTIVE : client.getStatus();
+            if (com.artech.portfolio.client.util.ClientConstants.STATUS_HOLD.equals(status)) {
+                org.springframework.security.core.context.SecurityContextHolder.clearContext();
+                response.sendRedirect(request.getContextPath() + "/login.html?status=HOLD");
+                return;
+            }
+            if (com.artech.portfolio.client.util.ClientConstants.STATUS_CANCELLED.equals(status)) {
+                org.springframework.security.core.context.SecurityContextHolder.clearContext();
+                response.sendRedirect(request.getContextPath() + "/login.html?status=CANCELLED");
+                return;
+            }
             if (client.getFailedAttempts() != 0 || client.getLockedUntil() != null) {
                 client.setFailedAttempts(0);
                 client.setLockedUntil(null);

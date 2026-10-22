@@ -44,6 +44,29 @@ public class Bond {
     private String issuer;
     private String creditRating;
     private LocalDate investmentDate;
+
+    /**
+     * BONDBP_V9 #2/#4: "In Progress" for a Bond SIP instalment whose details
+     * are still missing on the Bond Details Entry screen, "EXECUTED" once all
+     * mandatory attributes are entered (#4.h) and for every direct one-time
+     * entry (#6). Server-managed only - never taken from a request body.
+     */
+    private String status;
+
+    /**
+     * BONDBP_V9 #2: "One Time Investment" for direct entries (#6) or
+     * "SIP Investment" for records auto-created from a Bond SIP instalment
+     * (#4). Server-managed only.
+     */
+    private String investmentType;
+
+    /**
+     * BONDBP_V9 #4: the Bond SIP this row was auto-created from (null for one
+     * time entries). Doubles as the idempotency anchor of the SIP schedule -
+     * an instalment date that already has a bond row is never created twice.
+     */
+    @Column(name = "bond_sip_id")
+    private Long bondSipId;
     private double investmentAmountPerUnit;
     private double faceValuePerUnit;
     private int units;

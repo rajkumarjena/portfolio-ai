@@ -4,10 +4,16 @@
 <body>
 <main id="content" th:fragment="content" class="content">
     <h1>Bond SIP</h1>
-    <p class="muted">Set up a systematic bond investment (BONDBP_V7). Instalments are generated
-        automatically per the selected <strong>Frequency</strong> (weekly to yearly, like a bond's coupon
-        frequency) - a past SIP date is backfilled with every instalment already due, each one waiting on
-        the Bond SIP Transactions screen for the actual amount and the bond to associate.</p>
+    <p class="muted">Set up a systematic bond investment (BONDBP_V7/V9). Each due instalment becomes a
+        <strong>bond record</strong> on the Bond Records screen - status <em>In Progress</em>, Investment Type
+        <em>SIP Investment</em> - where you complete the remaining details, which turns it
+        <em>EXECUTED</em>. A past SIP date is backfilled with every instalment already due, and a
+        nightly job (00:00), the daily execution (00:01) and every application restart keep the
+        records in sync.</p>
+
+    <!-- BONDBP_V9 #5: server-computed sync banner - "Bond SIP Transaction is
+         OK ..." when every due instalment has its bond record. -->
+    <div id="syncBanner" class="status-banner" style="display:none;"></div>
 
     <div class="form-container">
         <div class="form-left">
@@ -23,24 +29,26 @@
                     </select>
                 </div>
                 <div>
-                    <label>Create Date</label>
-                    <!-- #2: auto-populated to the current date and always disabled -->
-                    <input type="date" id="createDate" name="createDate" disabled>
+                    <label>Investment Date *</label>
+                    <!-- BONDBP_V9 #3: renamed from Create Date (screen + database column);
+                         auto-populated to today and always disabled. Carried onto every bond
+                         record the SIP creates. -->
+                    <input type="date" id="investmentDate" name="investmentDate" disabled>
                 </div>
                 <div>
                     <label>SIP Date *</label>
+                    <!-- Becomes the Interest Payment Start Date of each bond record (#4.c) -->
                     <input type="date" id="sipDate" name="sipDate" required>
                 </div>
                 <div>
                     <label>SIP Amount *</label>
+                    <!-- Becomes the Investment Amount Per Unit of each bond record (#4.d) -->
                     <input type="number" id="sipAmount" name="sipAmount" min="0.01" step="0.01" required
                            placeholder="e.g. 5000">
                 </div>
                 <div>
                     <label>Frequency *</label>
-                    <!-- Like a bond's coupon frequency: drives how often a Bond SIP
-                         Transaction record is auto-created. A past SIP Date is
-                         backfilled with every instalment already due. -->
+                    <!-- Becomes the Coupon Frequency of each bond record (#4.e) -->
                     <select id="frequency" name="frequency" required>
                         <option value="" disabled selected>-- Select Frequency --</option>
                         <option value="WEEKLY">WEEKLY</option>
@@ -49,18 +57,6 @@
                         <option value="HALF-YEARLY">HALF-YEARLY</option>
                         <option value="YEARLY">YEARLY</option>
                     </select>
-                </div>
-                <div>
-                    <label>Actual SIP Amount</label>
-                    <!-- #5: entered later on the Bond SIP Transaction screen -->
-                    <input type="number" id="actualSipAmount" name="actualSipAmount" disabled
-                           placeholder="Filled from the SIP transaction">
-                </div>
-                <div>
-                    <label>Bond Name</label>
-                    <!-- #6/#7: associated later on the Bond SIP Transaction screen -->
-                    <input type="text" id="bondName" name="bondName" disabled
-                           placeholder="Associated from the SIP transaction">
                 </div>
                 <div>
                     <label>Status</label>
@@ -78,30 +74,41 @@
                     <li>The Issuer drop-down lists the issuers configured in Application Parameter
                         Configuration (param name: issuer), refreshed from the App Config object
                         every 15 minutes. SIP Date, SIP Amount and Frequency are mandatory;
-                        Create Date is stamped to today.</li>
+                        Investment Date is stamped to today (BONDBP_V9 #3).</li>
                     <li>Status starts as CREATED and is never editable (#3); it turns INPROGRESS
                         once the first instalment is generated.</li>
-                    <li>One Bond SIP Transaction record is auto-created per due instalment of the
-                        frequency schedule - entering a past SIP date backfills every instalment
-                        due so far; weekend dates roll to the next weekday (#4).</li>
-                    <li>On the transaction screen you enter the Actual SIP Amount and pick the bond
-                        (Bond Name|PAN, own or family) per instalment - that transaction then turns
-                        EXECUTED (#5-#7).</li>
+                    <li>On each due SIP date one <strong>bond record</strong> is created on the
+                        Bond Records screen: Issuer and Investment Date carried over, SIP Date as
+                        Interest Payment Start Date, SIP Amount as Investment Amount per Unit,
+                        Frequency as Coupon Frequency - everything else blank for you to complete
+                        (#4.b-#4.f). Weekend dates roll to the next weekday.</li>
+                    <li>Saving the completed details on the Bond Details Entry screen turns the
+                        record from <em>In Progress</em> to <em>EXECUTED</em> (#4.h). The banner
+                        above confirms when every due instalment is present.</li>
                 </ul>
             </div>
         </div>
     </div>
 
     <h2>Bond SIPs</h2>
-    <div class="nav-buttons" style="justify-content:flex-start;margin-top:0;">
-        <button type="button" id="adjustBtn" class="btn"><i data-lucide="refresh-cw"></i>Adjust / Reconcile</button>
+    <div class="nav-buttons" style="justify-content: space-between; align-items: center; margin-top:0;">
+        <div th:if="${currentUser != null and currentUser.admin}">
+            <button type="button" id="syncBtn" class="btn"><i data-lucide="refresh-cw"></i>Sync Now</button>
+        </div>
+        <div id="sipClientFilterWrapper" style="display:none;">
+            <label for="sipFilterClients">Client:</label>
+            <select id="sipFilterClients">
+                <option value="me" selected>My SIPs</option>
+                <option value="all">All Clients</option>
+            </select>
+            <button class="btn" type="button" id="sipFilterBtn"><i data-lucide="filter"></i>Filter</button>
+        </div>
     </div>
-    <div id="reconcileMsg" class="status-banner" style="display:none;margin-top:10px;"></div>
     <table class="data-table" id="sipList">
         <thead>
         <tr>
-            <th>Issuer</th><th>Create Date</th><th>SIP Date</th><th>SIP Amount</th>
-            <th>Frequency</th><th>Actual SIP Amount</th><th>Bond Name</th><th>Status</th><th>Actions</th>
+            <th>Issuer</th><th>Investment Date</th><th>SIP Date</th><th>SIP Amount</th>
+            <th>Frequency</th><th>Status</th><th id="sipClientCol" style="display:none;">Client</th><th>Actions</th>
         </tr>
         </thead>
         <tbody></tbody>
@@ -109,8 +116,8 @@
 
     <div class="nav-buttons">
         <a class="btn" href="/index.html"><i data-lucide="house"></i>Home</a>
-        <a class="btn" href="/bonds/bond-sip-transaction.html">
-            <i data-lucide="arrow-right-left"></i>Bond SIP Transactions</a>
+        <a class="btn" href="/bonds/bond-view.html">
+            <i data-lucide="scroll-text"></i>View Bonds</a>
     </div>
 </main>
 

@@ -12,6 +12,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (params.get('locked') === '1') {
         show('warn', 'Account temporarily locked after too many failed attempts. '
             + 'Try again in 15 minutes or reset your password.');
+    } else if (params.get('status') === 'HOLD') {
+        // BONDBP_V10 #4
+        show('warn', 'Your account is on hold. Please contact your administrator.');
+    } else if (params.get('status') === 'CANCELLED') {
+        // BONDBP_V10 #4
+        show('error', 'Your account is cancelled. Please contact your administrator.');
+    } else if (params.get('status') === 'HOLD') {
+        // BONDBP_V10 #4
+        show('warn', 'Your account is on hold. Please contact your administrator.');
+    } else if (params.get('status') === 'CANCELLED') {
+        // BONDBP_V10 #4
+        show('error', 'Your account is cancelled. Please contact your administrator.');
+    } else if (params.get('status') === 'HOLD') {
+        // BONDBP_V10 #4
+        show('warn', 'Your account is on hold. Please contact your administrator.');
+    } else if (params.get('status') === 'CANCELLED') {
+        // BONDBP_V10 #4
+        show('error', 'Your account is cancelled. Please contact your administrator.');
     } else if (params.get('error') === '1') {
         show('error', 'Invalid PAN or password.');
     } else if (params.get('logout') === '1') {

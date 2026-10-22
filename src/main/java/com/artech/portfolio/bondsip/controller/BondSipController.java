@@ -1,10 +1,7 @@
 package com.artech.portfolio.bondsip.controller;
 
-import com.artech.portfolio.bondsip.dto.BondSipBondOption;
-import com.artech.portfolio.bondsip.dto.BondSipTransactionView;
 import com.artech.portfolio.bondsip.dto.BondSipView;
 import com.artech.portfolio.bondsip.dto.CreateBondSipRequest;
-import com.artech.portfolio.bondsip.dto.UpdateBondSipTransactionRequest;
 import com.artech.portfolio.bondsip.service.BondSipService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -15,8 +12,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * BONDBP_V7 Bond SIP REST API. All ownership and validation rules live in the
- * service; pages only render what they are given.
+ * BONDBP_V7/V9 Bond SIP REST API. All ownership and validation rules live in
+ * the service; pages only render what they are given. BONDBP_V9 removed the
+ * Bond SIP Transaction endpoints - instalments are bond rows now, managed
+ * through /api/bonds.
  */
 @RestController
 @RequestMapping("/api/bond-sips")
@@ -34,47 +33,39 @@ public class BondSipController {
         return bondSipService.create(request);
     }
 
-    /** #1: the Bond SIP screen list. */
+    /** #1: the lean Bond SIP screen list. */
     @GetMapping
-    public List<BondSipView> listMine() {
-        return bondSipService.listMine();
+    public List<BondSipView> listMine(@RequestParam(value = "clientId", required = false) Long clientId,
+                                      @RequestParam(value = "all", required = false, defaultValue = "false") boolean all) {
+        return bondSipService.listMine(clientId, all);
     }
 
-    /** #5: the Bond SIP Transaction screen list. */
-    @GetMapping("/transactions")
-    public List<BondSipTransactionView> listTransactions() {
-        return bondSipService.listTransactions();
+    /** BONDBP_V9 #5: the screen's sync banner - "Bond SIP Transaction is OK ..." or the pending count. */
+    @GetMapping("/sync-status")
+    public Map<String, Object> syncStatus() {
+        return bondSipService.syncStatus();
     }
 
-    /** #6: Bond Name drop-down entries "Bond Name|PAN" (own + family bonds). */
-    @GetMapping("/bond-options")
-    public List<BondSipBondOption> bondOptions() {
-        return bondSipService.bondOptions();
-    }
-
-    /** #5/#7: enter Actual SIP Amount + associate a Bond Name -> EXECUTED. */
-    @PutMapping("/transactions/{id}")
-    public BondSipTransactionView updateTransaction(@PathVariable Long id,
-                                                    @RequestBody UpdateBondSipTransactionRequest request) {
-        return bondSipService.updateTransaction(id, request);
-    }
-
-    /** #4: manual execution trigger (same logic as the daily scheduler). */
+    /** #4: manual execution trigger (same idempotent logic as the scheduler and the restart sync). */
     @PostMapping("/run-due")
     public Map<String, Integer> runDue() {
         return Map.of("executed", bondSipService.runDueSips());
+    }
+
+    /** BONDBP_V9 #5 + V10 #1: manual Sync Now - create what is missing, then
+     * report the banner state. ADMIN-only. */
+    @PostMapping("/reconcile")
+    public Map<String, Object> reconcile() {
+        int created = bondSipService.reconcileForCurrentUser();
+        Map<String, Object> status = new java.util.LinkedHashMap<>(bondSipService.syncStatus());
+        status.put("created", created);
+        return status;
     }
 
     /** BONDBP_V8 #5: cancel a Bond SIP at any time. */
     @PostMapping("/{id}/cancel")
     public BondSipView cancel(@PathVariable Long id) {
         return bondSipService.cancelSip(id);
-    }
-
-    /** BONDBP_V8 #4: reconciliation/adjust check. */
-    @PostMapping("/reconcile")
-    public Map<String, Object> reconcile() {
-        return bondSipService.reconcileSips();
     }
 
     /** Validation / not-found errors surface as a clean 400/404/409, never a 500. */

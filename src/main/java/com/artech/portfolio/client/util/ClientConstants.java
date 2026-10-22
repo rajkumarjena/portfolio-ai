@@ -10,4 +10,9 @@ public class ClientConstants {
     public static final String ROLE_ADMIN = "ADMIN";
 
     public static final String[] ALL_ROLES = {ROLE_USER, ROLE_SUPERVISOR, ROLE_ADMIN};
+
+    // BONDBP_V10 #4: client account status
+    public static final String STATUS_ACTIVE = "ACTIVE";
+    public static final String STATUS_HOLD = "HOLD";
+    public static final String STATUS_CANCELLED = "CANCELLED";
 }

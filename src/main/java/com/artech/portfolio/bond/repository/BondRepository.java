@@ -16,4 +16,12 @@ public interface BondRepository extends JpaRepository<Bond, Long> {
     // the signed-in client, Family = him/her plus every associated family
     // member) in a single query so both columns are computed server-side (#6).
     List<Bond> findByClientIdIn(Collection<Long> clientIds);
+
+    /**
+     * BONDBP_V9 #4: every bond row auto-created from one Bond SIP's instalment
+     * schedule - the idempotency anchor (an instalment date that already has a
+     * bond row is never created twice) and the source of the screen's sync
+     * status.
+     */
+    List<Bond> findByBondSipId(Long bondSipId);
 }

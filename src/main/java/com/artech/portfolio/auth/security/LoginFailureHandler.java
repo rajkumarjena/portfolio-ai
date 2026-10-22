@@ -59,10 +59,18 @@ public class LoginFailureHandler implements AuthenticationFailureHandler {
         }
 
         String next = request.getParameter("next");
-        StringBuilder redirect = new StringBuilder(request.getContextPath())
-                .append("/login.html?error=1");
-        if (locked) {
-            redirect.append("&locked=1");
+        StringBuilder redirect = new StringBuilder(request.getContextPath());
+        // BONDBP_V10 #4: show specific messages for HOLD/CANCELLED
+        String exMsg = exception == null ? "" : exception.getMessage();
+        if (exMsg != null && exMsg.contains("on hold")) {
+            redirect.append("/login.html?status=HOLD");
+        } else if (exMsg != null && exMsg.contains("cancelled")) {
+            redirect.append("/login.html?status=CANCELLED");
+        } else {
+            redirect.append("/login.html?error=1");
+            if (locked) {
+                redirect.append("&locked=1");
+            }
         }
         if (next != null && !next.isBlank()) {
             redirect.append("&next=").append(java.net.URLEncoder.encode(next, java.nio.charset.StandardCharsets.UTF_8));

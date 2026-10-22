@@ -5,6 +5,13 @@
 <main id="content" th:fragment="content" class="content">
     <h1>Bond Records</h1>
 
+    <div class="status-legend">
+        <span class="chip status-In-Progress">In Progress</span>
+        <span class="muted">SIP instalment - open the details to complete it</span>
+        <span class="chip status-EXECUTED">EXECUTED</span>
+        <span class="muted">details complete</span>
+    </div>
+
     <div class="nav-buttons" style="justify-content: space-between; align-items: center;">
         <div>
             <a class="btn" href="/index.html"><i data-lucide="house"></i>Home</a>
@@ -12,19 +19,21 @@
         </div>
         <div id="viewClientFilterWrapper" style="display:none;">
             <label for="viewFilterClients">Client:</label>
-            <select id="viewFilterClients" multiple size="2">
-                <option value="__ALL__" selected>All Clients</option>
+            <select id="viewFilterClients">
+                <option value="" selected>All Clients</option>
             </select>
-            <button class="btn" onclick="applyViewClientFilter()"><i data-lucide="filter"></i>Filter</button>
+            <button class="btn" type="button" onclick="applyViewClientFilter()"><i data-lucide="filter"></i>Filter</button>
         </div>
     </div>
 
+    <!-- BONDBP_V9 #9: both sections are split, ordered (In Progress first,
+         Investment Date ascending) and paginated on the server. -->
     <h2>Active Bonds</h2>
     <table class="data-table" id="activeBonds">
         <thead>
         <tr>
-            <th>Name</th><th>Issuer</th><th>Credit Rating</th><th>Investment Date</th>
-            <th>Maturity Date</th><th>Units</th><th>Total Investment Amount</th>
+            <th>Name</th><th>Status</th><th>Investment Type</th><th>Issuer</th><th>Credit Rating</th>
+            <th>Investment Date</th><th>Maturity Date</th><th>Units</th><th>Total Investment Amount</th>
             <th>Maturity Amount</th><th>Client</th><th>Actions</th>
         </tr>
         </thead>
@@ -33,11 +42,13 @@
     <div class="pagination" id="activePagination"></div>
 
     <h2>Expired / Matured Bonds</h2>
+    <div class="muted" style="margin-bottom:8px;">
+        Bond history &mdash; matured records are permanent and can only be viewed (BONDBP_V9 #10).</div>
     <table class="data-table" id="expiredBonds">
         <thead>
         <tr>
-            <th>Name</th><th>Issuer</th><th>Credit Rating</th><th>Investment Date</th>
-            <th>Maturity Date</th><th>Units</th><th>Total Investment Amount</th>
+            <th>Name</th><th>Status</th><th>Investment Type</th><th>Issuer</th><th>Credit Rating</th>
+            <th>Investment Date</th><th>Maturity Date</th><th>Units</th><th>Total Investment Amount</th>
             <th>Maturity Amount</th><th>Client</th><th>Actions</th>
         </tr>
         </thead>

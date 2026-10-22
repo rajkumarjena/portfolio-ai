@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * AUTH.md (e): the admin business process - list users and elevate any user
@@ -74,7 +75,48 @@ public class AdminUserController {
         dto.setLocked(client.getLockedUntil() != null
                 && client.getLockedUntil() > System.currentTimeMillis());
         dto.setFailedAttempts(client.getFailedAttempts());
+        dto.setAccountStatus(client.getStatus() == null ? ClientConstants.STATUS_ACTIVE : client.getStatus());
         return dto;
+    }
+
+    // BONDBP_V10 #4: set client account status (ACTIVE/HOLD/CANCELLED)
+    private static final Set<String> ACCOUNT_STATUSES =
+            Set.of(ClientConstants.STATUS_ACTIVE, ClientConstants.STATUS_HOLD, ClientConstants.STATUS_CANCELLED);
+
+    @PutMapping("/{id}/status")
+    public ResponseEntity<AdminUserDto> updateStatus(@PathVariable Long id,
+                                                    @RequestBody Map<String, String> body,
+                                                    Authentication authentication) {
+        String status = body.get("status") == null ? "" : body.get("status").trim().toUpperCase();
+        if (!ACCOUNT_STATUSES.contains(status)) {
+            throw new AuthException(HttpStatus.BAD_REQUEST,
+                    "Status must be one of ACTIVE, HOLD, CANCELLED");
+        }
+        // Prevent changing own status
+        if (authentication != null
+                && authentication.getName() != null
+                && clientRepository.findById(id)
+                    .filter(c -> authentication.getName().equalsIgnoreCase(c.getPan()))
+                    .isPresent()) {
+            throw new AuthException(HttpStatus.BAD_REQUEST,
+                    "You cannot change your own account status");
+        }
+        Client client = clientRepository.findById(id)
+                .orElseThrow(() -> new AuthException(HttpStatus.NOT_FOUND, "User not found with id " + id));
+        if (ClientConstants.STATUS_CANCELLED.equals(client.getStatus())
+                && !ClientConstants.STATUS_CANCELLED.equals(status)) {
+            throw new AuthException(HttpStatus.CONFLICT, "A CANCELLED account cannot be reactivated");
+        }
+        client.setStatus(status);
+        Client saved = clientRepository.save(client);
+        return ResponseEntity.ok(toDto(saved));
+    }
+
+    @PutMapping("/../clients/{id}/status")
+    public ResponseEntity<AdminUserDto> updateClientStatus(@PathVariable Long id,
+                                                          @RequestBody Map<String, String> body,
+                                                          Authentication authentication) {
+        return updateStatus(id, body, authentication);
     }
 
     @ExceptionHandler(AuthException.class)

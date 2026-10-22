@@ -9,13 +9,17 @@ import lombok.Data;
 import java.time.LocalDate;
 
 /**
- * BONDBP_V7 - Bond SIP (#1): Issuer, Create Date, SIP Date, SIP Amount,
- * Actual SIP Amount, Bond Name, Status.
+ * BONDBP_V7/V9 - Bond SIP (#1): Issuer, Investment Date, SIP Date, SIP Amount,
+ * Frequency, Status.
  *
- * "Bond Name" is not stored here: it is derived on the list screen from the
- * Bond SIP Transaction created when the SIP executed (#4) and associated with
- * a bond (#6/#7). "Actual SIP Amount" is mirrored from that transaction once
- * the user enters it on the Bond SIP Transaction screen (#5).
+ * BONDBP_V9 #3: the old "Create Date" is renamed "Investment Date", both on
+ * the screen and in the database column, and is what a bond row auto-created
+ * from an instalment carries as its Investment Date (#4.b).
+ *
+ * BONDBP_V9 #4: there is no separate transaction table any more - each due
+ * instalment becomes a bond row directly (status "In Progress", Investment
+ * Type "SIP Investment") and the user completes the remaining details on the
+ * Bond Details Entry screen, which turns the row EXECUTED (#4.h).
  */
 @Entity
 @Data
@@ -35,27 +39,23 @@ public class BondSip {
     /** #2: mandatory. */
     private String issuer;
 
-    /** #2: auto-populated to the current date server-side; the form field is disabled. */
-    private LocalDate createDate;
+    /** BONDBP_V9 #3: auto-populated to the current date server-side (was "Create Date"). */
+    private LocalDate investmentDate;
 
-    /** #2: mandatory - the calendar date the SIP is scheduled for. */
+    /** #2: mandatory - the calendar date each instalment comes due. */
     private LocalDate sipDate;
 
-    /** #2: mandatory planned amount. */
+    /** #2: mandatory planned amount - becomes Investment Amount Per Unit of each bond row (#4.d). */
     private double sipAmount;
 
     /**
      * Frequency of the instalments (like a bond's coupon frequency):
-     * WEEKLY / MONTHLY / QUARTERLY / HALF-YEARLY / YEARLY. Every due instalment
-     * from the SIP Date onwards auto-creates one Bond SIP Transaction
-     * (INPROGRESS); a SIP entered with a past start date is backfilled with
-     * all instalments due up to today.
+     * WEEKLY / MONTHLY / QUARTERLY / HALF-YEARLY / YEARLY - mapped onto the
+     * bond row's Coupon Frequency (#4.e). A SIP entered with a past start date
+     * is backfilled with all instalments due up to today.
      */
     private String frequency;
 
-    /** #1/#5: entered on the Bond SIP Transaction screen, mirrored back here. */
-    private Double actualSipAmount;
-
-    /** #3: CREATED -> INPROGRESS when it executes (#4). Disabled field all the time. */
+    /** #3: CREATED -> INPROGRESS when the first instalment is generated (#4). Disabled field all the time. */
     private String status;
 }

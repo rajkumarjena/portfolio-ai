@@ -47,6 +47,15 @@ public class PortfolioUserDetailsService implements UserDetailsService {
         boolean accountLocked = client.getLockedUntil() != null
                 && client.getLockedUntil() > System.currentTimeMillis();
 
+        // BONDBP_V10 #4: HOLD/CANCELLED accounts cannot log in
+        String status = client.getStatus() == null ? ClientConstants.STATUS_ACTIVE : client.getStatus();
+        if (ClientConstants.STATUS_HOLD.equals(status)) {
+            throw new org.springframework.security.authentication.DisabledException("Account on hold");
+        }
+        if (ClientConstants.STATUS_CANCELLED.equals(status)) {
+            throw new org.springframework.security.authentication.DisabledException("Account cancelled");
+        }
+
         return User.builder()
                 .username(client.getPan())
                 .password(client.getPasswordHash())
