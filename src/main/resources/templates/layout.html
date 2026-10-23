@@ -46,30 +46,73 @@
         <nav class="sidebar-nav">
             <a th:href="@{/index.html}" class="nav-link"><i data-lucide="layout-dashboard"></i>Dashboard</a>
 
-            <div class="nav-group">Investments</div>
-            <a th:href="@{/bonds/bond-form.html}" class="nav-link"><i data-lucide="landmark"></i>Add Bond</a>
-            <a th:href="@{/bonds/bond-view.html}" class="nav-link"><i data-lucide="scroll-text"></i>View Bonds</a>
-            <a th:href="@{/bonds/bond-return-report.html}" class="nav-link"><i data-lucide="chart-no-axes-combined"></i>Bond Returns</a>
-            <a th:href="@{/bonds/bond-sip.html}" class="nav-link"><i data-lucide="calendar-days"></i>Bond SIP</a>
-            <a th:href="@{/fds/fd-form.html}" class="nav-link"><i data-lucide="badge-indian-rupee"></i>Add Fixed Deposit</a>
-            <a th:href="@{/fds/fd-view.html}" class="nav-link"><i data-lucide="rows-3"></i>View Fixed Deposits</a>
-            <a th:href="@{/mutualfunds/mf-sip-form.html}" class="nav-link"><i data-lucide="circle-plus"></i>Add Mutual Fund</a>
-            <a th:href="@{/mutualfunds/mf-view.html}" class="nav-link"><i data-lucide="list-checks"></i>MF SIPs</a>
-            <a th:href="@{/mutualfunds/mf-portfolio.html}" class="nav-link"><i data-lucide="briefcase"></i>MF Portfolio</a>
-            <a th:href="@{/mutualfunds/mf-portfolio-transactions.html}" class="nav-link"><i data-lucide="list"></i>MF Transactions</a>
-            <a th:href="@{/mutualfunds/mf-import.html}" class="nav-link"><i data-lucide="file-up"></i>Import MF Central</a>
-            <a th:href="@{/mutualfunds/mf-import-view.html}" class="nav-link"><i data-lucide="refresh-cw"></i>Validate &amp; Sync</a>
+            <!-- ADMIN_V3: the left panel is a tree - one collapsible group per
+                 dashboard section (Bonds, Mutual Funds, FD, Shares, Smallcase,
+                 Application, Administration). Groups start collapsed; app.js
+                 opens the one that contains the page you are currently on. -->
+            <details class="nav-tree">
+                <summary class="nav-tree-parent"><i data-lucide="landmark"></i>Bonds</summary>
+                <div class="nav-tree-children">
+                    <a th:href="@{/bonds/bond-form.html}" class="nav-link"><i data-lucide="landmark"></i>Add New Bond</a>
+                    <a th:href="@{/bonds/bond-view.html}" class="nav-link"><i data-lucide="scroll-text"></i>View Bonds</a>
+                    <a th:href="@{/bonds/bond-return-report.html}" class="nav-link"><i data-lucide="chart-no-axes-combined"></i>Bond Returns Report</a>
+                    <a th:href="@{/bonds/bond-sip.html}" class="nav-link"><i data-lucide="calendar-days"></i>Bond SIP</a>
+                </div>
+            </details>
 
-            <div class="nav-group">Administration</div>
-            <a th:href="@{/app-client-config.html}" class="nav-link"><i data-lucide="user-plus"></i>Add Client</a>
-            <a th:href="@{/app-client-view.html}" class="nav-link"><i data-lucide="users"></i>View Clients</a>
-            <a th:href="@{/app-param-config.html}" class="nav-link"><i data-lucide="sliders-horizontal"></i>App Parameters</a>
-            <a th:href="@{/admin-users.html}" class="nav-link" th:if="${currentUser != null and currentUser.admin}">
-                <i data-lucide="shield-check"></i>Manage Clients</a>
-            <a th:href="@{/admin-db-backup.html}" class="nav-link" th:if="${currentUser != null and currentUser.admin}">
-                <i data-lucide="database-backup"></i>Database Backup</a>
-            <a th:href="@{/admin-db-query.html}" class="nav-link" th:if="${currentUser != null and currentUser.admin}">
-                <i data-lucide="terminal"></i>Database Query</a>
+            <details class="nav-tree">
+                <summary class="nav-tree-parent"><i data-lucide="trending-up"></i>Mutual Funds</summary>
+                <div class="nav-tree-children">
+                    <a th:href="@{/mutualfunds/mf-sip-form.html}" class="nav-link"><i data-lucide="circle-plus"></i>Add New Mutual Fund SIP</a>
+                    <a th:href="@{/mutualfunds/mf-view.html}" class="nav-link"><i data-lucide="list-checks"></i>View Active Mutual Fund SIPs</a>
+                    <a th:href="@{/mutualfunds/mf-portfolio.html}" class="nav-link"><i data-lucide="briefcase"></i>Mutual Fund Portfolios</a>
+                    <a th:href="@{/mutualfunds/mf-portfolio-transactions.html}" class="nav-link"><i data-lucide="list"></i>Mutual Fund Portfolio Transactions</a>
+                    <a th:href="@{/mutualfunds/mf-import.html}" class="nav-link"><i data-lucide="file-up"></i>Import Mutual Fund from MF Central</a>
+                    <a th:href="@{/mutualfunds/mf-import-view.html}" class="nav-link"><i data-lucide="refresh-cw"></i>Validate and Sync Mutual Fund</a>
+                </div>
+            </details>
+
+            <details class="nav-tree">
+                <summary class="nav-tree-parent"><i data-lucide="badge-indian-rupee"></i>Fixed Deposits (FD)</summary>
+                <div class="nav-tree-children">
+                    <a th:href="@{/fds/fd-form.html}" class="nav-link"><i data-lucide="badge-indian-rupee"></i>Add New FD</a>
+                    <a th:href="@{/fds/fd-view.html}" class="nav-link"><i data-lucide="rows-3"></i>View FDs</a>
+                </div>
+            </details>
+
+            <details class="nav-tree">
+                <summary class="nav-tree-parent"><i data-lucide="candlestick-chart"></i>Shares</summary>
+                <div class="nav-tree-children">
+                    <a href="#" class="nav-link"><i data-lucide="badge-indian-rupee"></i>Add New Share</a>
+                    <a href="#" class="nav-link"><i data-lucide="eye"></i>View Shares</a>
+                </div>
+            </details>
+
+            <details class="nav-tree">
+                <summary class="nav-tree-parent"><i data-lucide="layout-grid"></i>Smallcase</summary>
+                <div class="nav-tree-children">
+                    <a href="#" class="nav-link"><i data-lucide="badge-indian-rupee"></i>Add New Smallcase</a>
+                    <a href="#" class="nav-link"><i data-lucide="eye"></i>View Smallcases</a>
+                </div>
+            </details>
+
+            <details class="nav-tree">
+                <summary class="nav-tree-parent"><i data-lucide="sliders-horizontal"></i>Application</summary>
+                <div class="nav-tree-children">
+                    <a th:href="@{/app-param-config.html}" class="nav-link"><i data-lucide="sliders-horizontal"></i>Add Application Parameter</a>
+                    <a th:href="@{/app-client-config.html}" class="nav-link"><i data-lucide="user-plus"></i>Add Client</a>
+                    <a th:href="@{/app-client-view.html}" class="nav-link"><i data-lucide="users"></i>View Clients</a>
+                </div>
+            </details>
+
+            <details class="nav-tree" th:if="${currentUser != null and currentUser.admin}">
+                <summary class="nav-tree-parent"><i data-lucide="shield-check"></i>Administration</summary>
+                <div class="nav-tree-children">
+                    <a th:href="@{/admin-users.html}" class="nav-link"><i data-lucide="shield-check"></i>Manage Clients</a>
+                    <a th:href="@{/admin-db-backup.html}" class="nav-link"><i data-lucide="database-backup"></i>Database Backup</a>
+                    <a th:href="@{/admin-db-query.html}" class="nav-link"><i data-lucide="terminal"></i>Database Query</a>
+                </div>
+            </details>
         </nav>
     </aside>
 

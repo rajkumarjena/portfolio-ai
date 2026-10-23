@@ -113,15 +113,53 @@ a  { color: var(--color-primary); }
 
 .sidebar-nav { display: flex; flex-direction: column; gap: 2px; }
 
-.nav-group {
-    margin: var(--space-4) 0 var(--space-1);
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--color-text-muted);
-    padding-left: var(--space-2);
+/* ADMIN_V3: collapsible tree in the sidebar. Each group is a <details>; the
+   summary is the parent node (chevron rotates when open) and the children
+   hang off an indented dashed rail. app.js opens the group of the current
+   page on load so the active link is never hidden. */
+.nav-tree { margin-top: var(--space-2); }
+
+.nav-tree > summary {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius);
+    color: var(--color-text);
+    font-weight: 600;
+    cursor: pointer;
+    list-style: none;              /* hide the native triangle */
 }
+
+.nav-tree > summary::-webkit-details-marker { display: none; }
+.nav-tree > summary:hover { background: var(--color-primary-soft); color: var(--color-primary); }
+
+/* chevron drawn with borders so it needs no extra element */
+.nav-tree > summary::before {
+    content: "";
+    flex: none;
+    width: 0;
+    height: 0;
+    border-left: 5px solid currentColor;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+    transition: transform 0.15s ease;
+}
+
+.nav-tree[open] > summary::before { transform: rotate(90deg); }
+.nav-tree > summary svg { width: 16px; height: 16px; flex: none; }
+
+.nav-tree-children {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 2px 0 2px var(--space-3);
+    padding-left: var(--space-2);
+    border-left: 1px dashed var(--color-border);   /* the tree rail */
+}
+
+.nav-tree-children .nav-link { padding: 6px var(--space-2); font-size: 13px; }
+.nav-tree-children .nav-link svg { width: 14px; height: 14px; }
 
 .nav-link {
     display: flex;

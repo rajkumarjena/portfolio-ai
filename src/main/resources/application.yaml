@@ -1,10 +1,10 @@
 server:
   port: 8081
-  ssl:
-    key-store: "file:/home/ubuntu/keystore.p12"
-    key-store-type: "PKCS12"
-    key-store-password: "portfolio"
-    key-alias: "springboot"
+#  ssl:
+#    key-store: "file:/home/ubuntu/keystore.p12"
+#    key-store-type: "PKCS12"
+#    key-store-password: "portfolio"
+#    key-alias: "springboot"
 spring:
   application:
     name: portfolio
@@ -15,8 +15,51 @@ spring:
       max-file-size: 200MB
       max-request-size: 210MB
   datasource:
-    url: jdbc:sqlite:${user.home}/portfolio.db
+    # ADMIN_V3 #2/#7: every database-specific setting lives in this one block,
+    # so a future migration (PostgreSQL / SQL Server / Oracle) is a
+    # PROPERTIES-ONLY change - swap url, driver-class-name,
+    # spring.jpa.database-platform and the hikari block below. No Java code
+    # holds any database knowledge.
+    #
+    # ADMIN_V3 #1/#5/#6/#8: SQLite pragmas that fix "[SQLITE_BUSY] The database
+    # file is locked" when two processes (your app + the other instance) open
+    # the same portfolio.db at the same time:
+    #   - journal_mode=WAL  lets the single writer commit WHILE readers read,
+    #                       here and in the other process (the old journal
+    #                       mode blocked readers against writers across
+    #                       processes - that was the reported failure). WAL is
+    #                       stored persistently in the .db file, so both app
+    #                       instances benefit; portfolio.db-wal / -shm
+    #                       sidecars appear next to it and backup/refresh
+    #                       already handles them.
+    #   - busy_timeout=10000 SQLite WAITS up to 10s for a busy lock and
+    #                       retries instead of failing the statement right
+    #                       away (#5: "waiting time instead failing
+    #                       immediately"). This wait is also the bound that
+    #                       hands the lock to the next waiter - a writer
+    #                       holding longer makes the next one fail with a
+    #                       clear error instead of hanging forever (#4:
+    #                       "maximum transaction execution time").
+    #   - synchronous=NORMAL SQLite's recommended WAL companion: commits skip
+    #                       the per-commit fsync (still crash-safe; only the
+    #                       last commits on OS/power loss may be lost) so the
+    #                       write lock is held for a shorter time too.
+    url: "jdbc:sqlite:${user.home}/portfolio.db?busy_timeout=10000&journal_mode=WAL&synchronous=NORMAL"
     driver-class-name: org.sqlite.JDBC
+    hikari:
+      # ADMIN_V3 #3/#4: the write-concurrency knob, managed from this file.
+      # SQLite allows exactly ONE writer at a time, so the pool owns a single
+      # connection: every transaction takes turns instead of racing itself for
+      # the file lock, and threads queue instead of failing (#5). Transactions
+      # are short service methods, so the queue drains immediately.
+      # After migrating to PostgreSQL / SQL Server / Oracle, raise these to the
+      # server's own capacity, e.g. maximum-pool-size: 10.
+      maximum-pool-size: 1
+      minimum-idle: 1
+      # How long a thread waits for the (single) pooled connection before
+      # giving up - keep it above the slowest request (the admin DB Query
+      # screen may hold the connection up to app.admin.query.timeout-seconds).
+      connection-timeout: 30000
   mail:
     host: ${SPRING_MAIL_HOST}
     port: ${SPRING_MAIL_PORT:587}

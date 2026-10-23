@@ -16,7 +16,15 @@
         var here = window.location.pathname || '/';
         document.querySelectorAll('.sidebar-nav .nav-link').forEach(function (link) {
             var target = link.getAttribute('href');
-            link.classList.toggle('active', target === here);
+            var active = target === here;
+            link.classList.toggle('active', active);
+            // ADMIN_V3: links now live inside collapsible tree groups -
+            // expand the group that contains the current page, otherwise
+            // the highlighted link would be hidden.
+            if (active && link.closest) {
+                var group = link.closest('.nav-tree');
+                if (group && !group.open) group.open = true;
+            }
         });
     }
 

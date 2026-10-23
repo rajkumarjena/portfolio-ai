@@ -29,6 +29,13 @@ public class WidgetRow {
     private LocalDate from;
     private LocalDate to;
 
+    /**
+     * BONDBP_V12 #2: for the realised-return row the range is "since the past
+     * up to today", so there is no lower bound - only the upper bound (today).
+     * Null for the period rows (which use from/to) and for point-in-time rows.
+     */
+    private LocalDate since;
+
     /** BONDBP_V6 #4: return of the logged in user. */
     private double self;
 

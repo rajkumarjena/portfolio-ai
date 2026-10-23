@@ -112,13 +112,6 @@ public class AdminUserController {
         return ResponseEntity.ok(toDto(saved));
     }
 
-    @PutMapping("/../clients/{id}/status")
-    public ResponseEntity<AdminUserDto> updateClientStatus(@PathVariable Long id,
-                                                          @RequestBody Map<String, String> body,
-                                                          Authentication authentication) {
-        return updateStatus(id, body, authentication);
-    }
-
     @ExceptionHandler(AuthException.class)
     public ResponseEntity<Map<String, String>> handleAuthException(AuthException ex) {
         return ResponseEntity.status(ex.getStatus()).body(Map.of("message", ex.getMessage()));
