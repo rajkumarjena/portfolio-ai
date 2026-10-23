@@ -50,6 +50,8 @@ public class PortfolioSummaryServiceImpl implements PortfolioSummaryService {
     static final String ROW_RETURN_QUARTER = "Quarterly Return Due";
     static final String ROW_RETURN_YEAR = "Yearly Return Due";
     static final String ROW_TOTAL_INVESTMENT = "Total Capital Invested";
+    // BONDBP_V12 #1/#2: interest already realised - every past payout up to today.
+    static final String ROW_TOTAL_REALISED = "Total Realised Return";
 
     private final BondRepository bondRepository;
     private final CashFlowDataRepository cashFlowDataRepository;
@@ -105,6 +107,13 @@ public class PortfolioSummaryServiceImpl implements PortfolioSummaryService {
                 returnBetween(familyScope, today, yearEnd)));
         view.getRows().add(row(ROW_TOTAL_INVESTMENT, "INVESTMENT", null, null,
                 selfInvestment, familyInvestment));
+        // BONDBP_V12 #2: interest already realised - sum of the cash-flow payout
+        // column for every payment dated up to today (no lower bound), across
+        // the client and his/her associated family members. Redemption (amount)
+        // is deliberately excluded: it is a return of capital, not interest.
+        view.getRows().add(row(ROW_TOTAL_REALISED, "REALISED", null, today,
+                realisedReturn(selfScope, today),
+                realisedReturn(familyScope, today)));
         return view;
     }
 
@@ -174,6 +183,19 @@ public class PortfolioSummaryServiceImpl implements PortfolioSummaryService {
                 .sum();
     }
 
+    /**
+     * BONDBP_V12 #2: "Total Realised Return" - the sum of the interest payout
+     * column for every cash-flow record whose payment date falls in the past
+     * up to today (unbounded below, capped at today). Redemption (amount) is
+     * excluded because it is a return of capital, not an interest return.
+     */
+    private double realisedReturn(Scope scope, LocalDate today) {
+        return scope.cashFlows().stream()
+                .filter(cf -> cf.getDate() != null && !cf.getDate().isAfter(today))
+                .mapToDouble(BondCashFlow::getPayout)
+                .sum();
+    }
+
     /** Last day of the calendar quarter containing today (BONDBP_V6 #4.d/#5). */
     private static LocalDate quarterEnd(LocalDate today) {
         int lastMonth = ((today.getMonthValue() - 1) / 3) * 3 + 3; // 3, 6, 9 or 12
@@ -193,7 +215,7 @@ public class PortfolioSummaryServiceImpl implements PortfolioSummaryService {
         return row;
     }
 
-    /** One owner scope's data, loaded once and reused for all five rows. */
+    /** One owner scope's data, loaded once and reused for all rows. */
     private record Scope(List<Bond> bonds, List<BondCashFlow> cashFlows) {
     }
 }

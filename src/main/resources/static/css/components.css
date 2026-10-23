@@ -501,8 +501,8 @@ tr.row-SKIPPED     { background: #f4f5f7 !important; color: var(--color-text-mut
 @media (min-width: 701px) {
     .widget-card {
         flex: 0 1 calc(25% - 12px);  /* (100% - 3 * gap) / 4 -> 4 per row */
-        min-width: 185px;            /* below this the table stops fitting */
-        max-width: 260px;            /* keeps rest area < 1/4 on wide screens */
+        min-width: 195px;            /* table needs ~190px: captions AND figures fit */
+        max-width: 195px;            /* BONDBP_V12: another 25% off the 260px tile */
         position: relative;
         z-index: 1;
         transform-origin: top left;  /* refined per tile in app.js */
@@ -521,22 +521,24 @@ tr.row-SKIPPED     { background: #f4f5f7 !important; color: var(--color-text-mut
         outline-offset: 2px;
     }
 
-    /* Compact head: one short line, small icon. */
-    .widget-head { gap: var(--space-2); padding: 5px var(--space-2); }
-    .widget-icon { width: 20px; height: 20px; }
-    .widget-icon svg { width: 13px; height: 13px; }
-    .widget-titles { display: flex; align-items: baseline; gap: 6px; }
-    .widget-titles h2 { font-size: 11px; }
-    .widget-sub { font-size: 9px; }
+    /* Compact head: one short line, small icon - titles never wrap (#3). */
+    .widget-head { gap: var(--space-1); padding: 4px var(--space-2); }
+    .widget-icon { width: 16px; height: 16px; }
+    .widget-icon svg { width: 11px; height: 11px; }
+    .widget-titles { display: flex; align-items: baseline; gap: 5px; white-space: nowrap; }
+    .widget-titles h2 { font-size: 10px; }
+    .widget-sub { font-size: 8px; }
 
-    /* Compact table: tight rows, small type - the zoom supplies legibility. */
-    .widget-table { font-size: 9px; }
-    .widget-table th { padding: 3px var(--space-2); font-size: 8px; }
-    .widget-table td { padding: 4px var(--space-2); }
-    .widget-label { font-size: 9px; }
-    .widget-range { margin-top: 0; font-size: 7.5px; line-height: 1.25; }
-    .widget-table td.amt { font-size: 10px; }
-    .widget-foot { padding: 3px var(--space-2); font-size: 8px; }
+    /* Compact table: tight rows, small type - the zoom supplies legibility.
+       The caption and its range stay on ONE line each (#3: nothing spills to
+       the next line); the figures are nowrap and zoom for reading. */
+    .widget-table { font-size: 8px; }
+    .widget-table th { padding: 2px 3px; font-size: 7px; }
+    .widget-table td { padding: 3px; }
+    .widget-label { font-size: 7.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .widget-range { margin-top: 0; font-size: 7px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .widget-table td.amt { font-size: 7.5px; }
+    .widget-foot { padding: 2px var(--space-2); font-size: 7px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

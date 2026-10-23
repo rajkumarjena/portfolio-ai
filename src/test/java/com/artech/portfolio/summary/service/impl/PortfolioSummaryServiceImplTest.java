@@ -36,6 +36,9 @@ import static org.mockito.Mockito.when;
  *   #4   Family = the signed-in client plus his/her associated family members,
  *   #6   the service computes everything (the page renders verbatim).
  *
+ * BONDBP_V12 #2: Total Realised Return = sum of the cash-flow payout column
+ * for every payment dated up to today (no lower bound), over Self and Family.
+ *
  * 20 Oct 2026 is a Tuesday, so "this week" ends on Sunday 25 Oct 2026 - the
  * exact example given in spec point #5.
  */
@@ -95,7 +98,7 @@ class PortfolioSummaryServiceImplTest {
     private static BondCashFlow flow(Bond bond, String date, double payout, double amount) {
         BondCashFlow cf = new BondCashFlow();
         cf.setBond(bond);
-        cf.setDate(LocalDate.parse(date));
+        cf.setDate(date == null ? null : LocalDate.parse(date));
         cf.setPayout(payout);
         cf.setAmount(amount);
         return cf;
@@ -108,18 +111,22 @@ class PortfolioSummaryServiceImplTest {
         BondWidgetView view = service.getBondWidget();
 
         assertEquals(TODAY, view.getAsOf());
-        assertEquals(5, view.getRows().size());
+        assertEquals(6, view.getRows().size());
 
-        WidgetRow total = row(view, "Total Investment");
-        assertNull(total.getFrom(), "Total Investment is point-in-time, not a range");
+        WidgetRow total = row(view, "Total Capital Invested");
+        assertNull(total.getFrom(), "Total Capital Invested is point-in-time, not a range");
         assertNull(total.getTo());
 
-        assertEquals(TODAY, row(view, "Return This Week").getFrom());
-        assertEquals(LocalDate.of(2026, 10, 25), row(view, "Return This Week").getTo(),
+        WidgetRow realised = row(view, "Total Realised Return");
+        assertNull(realised.getFrom(), "Realised Return is up-to-today, no lower bound");
+        assertEquals(TODAY, realised.getTo());
+
+        assertEquals(TODAY, row(view, "Weekly Return Due").getFrom());
+        assertEquals(LocalDate.of(2026, 10, 25), row(view, "Weekly Return Due").getTo(),
                 "today Tue 20 Oct -> week ends Sun 25 Oct 2026 (spec #5 example)");
-        assertEquals(LocalDate.of(2026, 10, 31), row(view, "Return This Month").getTo());
-        assertEquals(LocalDate.of(2026, 12, 31), row(view, "Return This Quarter").getTo());
-        assertEquals(LocalDate.of(2026, 12, 31), row(view, "Return This Year").getTo());
+        assertEquals(LocalDate.of(2026, 10, 31), row(view, "Monthly Return Due").getTo());
+        assertEquals(LocalDate.of(2026, 12, 31), row(view, "Quarterly Return Due").getTo());
+        assertEquals(LocalDate.of(2026, 12, 31), row(view, "Yearly Return Due").getTo());
     }
 
     @Test
@@ -131,10 +138,10 @@ class PortfolioSummaryServiceImplTest {
 
         BondWidgetView view = febService.getBondWidget();
 
-        assertEquals(LocalDate.of(2026, 2, 15), row(view, "Return This Week").getTo());
-        assertEquals(LocalDate.of(2026, 2, 28), row(view, "Return This Month").getTo());
-        assertEquals(LocalDate.of(2026, 3, 31), row(view, "Return This Quarter").getTo());
-        assertEquals(LocalDate.of(2026, 12, 31), row(view, "Return This Year").getTo());
+        assertEquals(LocalDate.of(2026, 2, 15), row(view, "Weekly Return Due").getTo());
+        assertEquals(LocalDate.of(2026, 2, 28), row(view, "Monthly Return Due").getTo());
+        assertEquals(LocalDate.of(2026, 3, 31), row(view, "Quarterly Return Due").getTo());
+        assertEquals(LocalDate.of(2026, 12, 31), row(view, "Yearly Return Due").getTo());
     }
 
     // ------------------------------------------------------------------ #4.a
@@ -157,8 +164,8 @@ class PortfolioSummaryServiceImplTest {
         double expected = 1000 * 100 - 20000; // 80,000
         BondWidgetView view = service.getBondWidget();
 
-        assertEquals(expected, row(view, "Total Investment").getSelf(), 0.001);
-        assertEquals(expected, row(view, "Total Investment").getFamily(), 0.001,
+        assertEquals(expected, row(view, "Total Capital Invested").getSelf(), 0.001);
+        assertEquals(expected, row(view, "Total Capital Invested").getFamily(), 0.001,
                 "no family members linked -> Family equals Self");
     }
 
@@ -181,10 +188,10 @@ class PortfolioSummaryServiceImplTest {
 
         BondWidgetView view = service.getBondWidget();
 
-        assertEquals(350, row(view, "Return This Week").getSelf(), 0.001);      // 150 + 200
-        assertEquals(1050, row(view, "Return This Month").getSelf(), 0.001);    // + 300 + 400
-        assertEquals(2150, row(view, "Return This Quarter").getSelf(), 0.001);  // + 500 + 600
-        assertEquals(2150, row(view, "Return This Year").getSelf(), 0.001);
+        assertEquals(350, row(view, "Weekly Return Due").getSelf(), 0.001);      // 150 + 200
+        assertEquals(1050, row(view, "Monthly Return Due").getSelf(), 0.001);    // + 300 + 400
+        assertEquals(2150, row(view, "Quarterly Return Due").getSelf(), 0.001);  // + 500 + 600
+        assertEquals(2150, row(view, "Yearly Return Due").getSelf(), 0.001);
     }
 
     // -------------------------------------------------------------------- #4
@@ -211,14 +218,61 @@ class PortfolioSummaryServiceImplTest {
 
         BondWidgetView view = service.getBondWidget();
 
-        assertEquals(10000, row(view, "Total Investment").getSelf(), 0.001);
-        assertEquals(20000, row(view, "Total Investment").getFamily(), 0.001);
-        assertEquals(100, row(view, "Return This Week").getSelf(), 0.001);
-        assertEquals(500, row(view, "Return This Week").getFamily(), 0.001);
+        assertEquals(10000, row(view, "Total Capital Invested").getSelf(), 0.001);
+        assertEquals(20000, row(view, "Total Capital Invested").getFamily(), 0.001);
+        assertEquals(100, row(view, "Weekly Return Due").getSelf(), 0.001);
+        assertEquals(500, row(view, "Weekly Return Due").getFamily(), 0.001);
 
         // The two scopes really are two scopes: Self = [1], Family = [1, 2].
         verify(cashFlowDataRepository).findAllForClients(List.of(1L));
         verify(cashFlowDataRepository).findAllForClients(List.of(1L, 2L));
+    }
+
+    // ---------------------------------------------------------------- BONDBP_V12 #2
+
+    @Test
+    void totalRealisedReturnSumsPayoutsUpToTodayExcludingRedemptionsAndFutureDates() {
+        Bond bond = bond(30L, me, "2030-01-01", 1000, 1);
+        when(bondRepository.findByClientIdIn(List.of(1L))).thenReturn(List.of(bond));
+        when(cashFlowDataRepository.findAllForClients(List.of(1L))).thenReturn(List.of(
+                flow(bond, null, 50, 0),      // no date -> never counted
+                flow(bond, "2025-04-01", 150, 0),  // deep past -> realised (no lower bound)
+                flow(bond, "2026-10-20", 300, 0),  // today -> realised (inclusive cap)
+                flow(bond, "2026-10-21", 400, 0),  // tomorrow -> not yet realised
+                flow(bond, "2026-09-30", 0, 9999)  // redemption -> capital, not interest
+        ));
+
+        BondWidgetView view = service.getBondWidget();
+
+        assertEquals(450, row(view, "Total Realised Return").getSelf(), 0.001);  // 150 + 300
+        assertEquals(450, row(view, "Total Realised Return").getFamily(), 0.001,
+                "no family members linked -> Family equals Self");
+    }
+
+    @Test
+    void totalRealisedReturnIncludesEveryAssociatedFamilyMembersPayouts() {
+        Client member = new Client();
+        member.setId(2L);
+        ClientFamilyMember link = new ClientFamilyMember();
+        link.setMember(member);
+        me.setFamilyMembers(new ArrayList<>(List.of(link)));
+
+        Bond myBond = bond(40L, me, "2030-01-01", 1000, 1);
+        Bond memberBond = bond(41L, member, "2030-01-01", 1000, 1);
+
+        when(bondRepository.findByClientIdIn(List.of(1L))).thenReturn(List.of(myBond));
+        when(bondRepository.findByClientIdIn(List.of(1L, 2L))).thenReturn(List.of(myBond, memberBond));
+        when(cashFlowDataRepository.findAllForClients(List.of(1L)))
+                .thenReturn(List.of(flow(myBond, "2026-01-15", 100, 0)));
+        when(cashFlowDataRepository.findAllForClients(List.of(1L, 2L))).thenReturn(List.of(
+                flow(myBond, "2026-01-15", 100, 0),
+                flow(memberBond, "2026-02-15", 250, 0),
+                flow(memberBond, "2026-12-15", 777, 0)));  // future -> excluded
+
+        BondWidgetView view = service.getBondWidget();
+
+        assertEquals(100, row(view, "Total Realised Return").getSelf(), 0.001);
+        assertEquals(350, row(view, "Total Realised Return").getFamily(), 0.001);
     }
 
     // ------------------------------------------------------------------ #6

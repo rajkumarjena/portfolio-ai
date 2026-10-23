@@ -26,10 +26,14 @@
   }
 
   // BONDBP_V6 #5: each period row shows its range under the caption,
-  // e.g. "20 Oct 2026 - 25 Oct 2026" for the current week.
+  // e.g. "20 Oct 2026 - 25 Oct 2026" for the current week. BONDBP_V12 #2: the
+  // realised-return row is "up to today" with no lower bound, so it renders as
+  // "... - 20 Oct 2026".
   function fmtRange(row) {
-    if (!row.from || !row.to) return '';
-    return fmtDate(row.from) + ' - ' + fmtDate(row.to);
+    if (row.since && row.to) return fmtDate(row.since) + ' - ' + fmtDate(row.to);
+    if (row.from && row.to) return fmtDate(row.from) + ' - ' + fmtDate(row.to);
+    if (row.to) return '\u2026 - ' + fmtDate(row.to);
+    return '';
   }
 
   function tbody() {
