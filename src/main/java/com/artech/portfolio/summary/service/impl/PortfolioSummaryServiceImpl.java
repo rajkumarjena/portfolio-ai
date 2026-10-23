@@ -45,11 +45,11 @@ public class PortfolioSummaryServiceImpl implements PortfolioSummaryService {
 
     // Row captions from the sample widget report (BONDBP_V6 #3) - kept here so
     // the API stays the single source the UI renders.
-    static final String ROW_TOTAL_INVESTMENT = "Total Investment";
-    static final String ROW_RETURN_WEEK = "Return This Week";
-    static final String ROW_RETURN_MONTH = "Return This Month";
-    static final String ROW_RETURN_QUARTER = "Return This Quarter";
-    static final String ROW_RETURN_YEAR = "Return This Year";
+    static final String ROW_RETURN_WEEK = "Weekly Return Due";
+    static final String ROW_RETURN_MONTH = "Monthly Return Due";
+    static final String ROW_RETURN_QUARTER = "Quarterly Return Due";
+    static final String ROW_RETURN_YEAR = "Yearly Return Due";
+    static final String ROW_TOTAL_INVESTMENT = "Total Capital Invested";
 
     private final BondRepository bondRepository;
     private final CashFlowDataRepository cashFlowDataRepository;
@@ -91,8 +91,6 @@ public class PortfolioSummaryServiceImpl implements PortfolioSummaryService {
 
         BondWidgetView view = new BondWidgetView();
         view.setAsOf(today);
-        view.getRows().add(row(ROW_TOTAL_INVESTMENT, "INVESTMENT", null, null,
-                selfInvestment, familyInvestment));
         view.getRows().add(row(ROW_RETURN_WEEK, "WEEK", today, weekEnd,
                 returnBetween(selfScope, today, weekEnd),
                 returnBetween(familyScope, today, weekEnd)));
@@ -105,6 +103,8 @@ public class PortfolioSummaryServiceImpl implements PortfolioSummaryService {
         view.getRows().add(row(ROW_RETURN_YEAR, "YEAR", today, yearEnd,
                 returnBetween(selfScope, today, yearEnd),
                 returnBetween(familyScope, today, yearEnd)));
+        view.getRows().add(row(ROW_TOTAL_INVESTMENT, "INVESTMENT", null, null,
+                selfInvestment, familyInvestment));
         return view;
     }
 
