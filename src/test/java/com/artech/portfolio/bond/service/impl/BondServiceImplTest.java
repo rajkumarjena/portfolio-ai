@@ -203,14 +203,40 @@ class BondServiceImplTest {
         assertEquals(7L, result.getBondSipId());
     }
 
+    // BONDBP_V10 #2: Edit/Delete activated for all users on Active Bonds -
+    // the gate is ownership, not the role ladder.
     @Test
-    void plainUserCannotEditBonds() {
+    void plainUserCanEditOwnActiveBond() {
         when(currentUserService.isAdmin()).thenReturn(false);
         when(currentUserService.hasAnyRole(any(), any())).thenReturn(false);
 
-        ResponseStatusException error = expectRejected(1L, completedDetails());
+        Bond stored = completedDetails();
+        stored.setId(nextId++);
+        stored.setClient(owner);
+        storedBond = stored;
 
-        assertEquals(HttpStatus.FORBIDDEN, error.getStatusCode());
+        Bond result = bondService.updateBond(stored.getId(), completedDetails());
+
+        assertEquals("Alpha NCD 2030", result.getBondName(), "own active bond is editable");
+    }
+
+    @Test
+    void plainUserCannotEditAnotherClientsBond() {
+        when(currentUserService.isAdmin()).thenReturn(false);
+        when(currentUserService.hasAnyRole(any(), any())).thenReturn(false);
+
+        Client other = new Client();
+        other.setId(99L);
+        Bond stored = completedDetails();
+        stored.setId(nextId++);
+        stored.setClient(other);
+        storedBond = stored;
+
+        RuntimeException error = assertThrows(RuntimeException.class,
+                () -> bondService.updateBond(stored.getId(), completedDetails()));
+
+        assertTrue(error.getMessage().contains("not found"),
+                "another client's bond is never visible - not even as a rejection");
     }
 
     // --------------------------------------------------------------- #10 matured

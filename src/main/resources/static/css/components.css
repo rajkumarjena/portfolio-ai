@@ -587,6 +587,12 @@ tr.row-SKIPPED     { background: #f4f5f7 !important; color: var(--color-text-mut
 .fam-error { color: var(--color-fail); font-size: 12px; margin: 0 0 var(--space-2); }
 
 .locked-badge { color: var(--color-fail); font-weight: 700; }
+
+/* BONDBP_V10 #4: client account status chips on the Client Role Management screen. */
+.chip.status-active    { background: var(--color-pass-soft); color: #0d5c37; border: 1px solid var(--color-pass); }
+.chip.status-hold      { background: var(--color-warn-soft); color: #7a5a00; border: 1px solid var(--color-warn); }
+.chip.status-cancelled { background: var(--color-fail-soft, #fbe3e5); color: var(--color-fail); border: 1px solid var(--color-fail); }
+.status-actions select, .status-actions button { margin-right: var(--space-2); }
 #feedback { font-weight: 600; margin: var(--space-3) 0; }
 #feedback.ok { color: var(--color-pass); }
 #feedback.fail { color: var(--color-fail); }
