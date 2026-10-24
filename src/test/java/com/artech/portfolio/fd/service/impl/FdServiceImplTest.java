@@ -2,18 +2,24 @@ package com.artech.portfolio.fd.service.impl;
 
 import com.artech.portfolio.auth.service.CurrentUserService;
 import com.artech.portfolio.client.entity.Client;
+import com.artech.portfolio.client.repository.ClientRepository;
 import com.artech.portfolio.common.repository.AppParamRepository;
 import com.artech.portfolio.fd.entity.FixedDeposit;
 import com.artech.portfolio.fd.repository.FixedDepositRepository;
 import com.artech.portfolio.fd.util.FdCalculator;
+import com.artech.portfolio.fd.util.FdConstants;
+import com.artech.portfolio.common.entity.AppParamConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -23,16 +29,20 @@ import static org.mockito.Mockito.when;
 class FdServiceImplTest {
 
     private FixedDepositRepository fixedDepositRepository;
+    private AppParamRepository appParamRepository;
     private CurrentUserService currentUserService;
+    private ClientRepository clientRepository;
     private FdServiceImpl fdService;
     private Client me;
 
     @BeforeEach
     void setUp() {
         fixedDepositRepository = mock(FixedDepositRepository.class);
+        appParamRepository = mock(AppParamRepository.class);
         currentUserService = mock(CurrentUserService.class);
+        clientRepository = mock(ClientRepository.class);
         fdService = new FdServiceImpl(fixedDepositRepository,
-                mock(AppParamRepository.class), currentUserService);
+                appParamRepository, currentUserService, clientRepository);
 
         me = new Client();
         me.setId(1L);
@@ -85,5 +95,43 @@ class FdServiceImplTest {
         FixedDeposit updated = fdService.updateFixedDeposit(5L, incoming);
 
         assertEquals(107206.28, updated.getMaturityAmount(), 0.01);
+    }
+
+    // --------------------------------------- ADMIN_V6 #3 seeded rows carry a client_id
+
+    @Test
+    void seedDefaultBankNamesAttachesTheAdminOwnerClientId() {
+        Client admin = new Client();
+        admin.setId(9L);
+        admin.setRole("ADMIN");
+        when(appParamRepository
+                .findByInvestmentTypeAndParamName(FdConstants.FD, FdConstants.BANK))
+                .thenReturn(List.of());
+        when(clientRepository.findByRole("ADMIN")).thenReturn(List.of(admin));
+        when(appParamRepository.save(any(AppParamConfig.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        fdService.seedDefaultBankNames();
+
+        verify(appParamRepository, org.mockito.Mockito.times(5))
+                .save(any(AppParamConfig.class));
+        org.mockito.ArgumentCaptor<AppParamConfig> captor =
+                org.mockito.ArgumentCaptor.forClass(AppParamConfig.class);
+        verify(appParamRepository, org.mockito.Mockito.times(5)).save(captor.capture());
+        captor.getAllValues().forEach(row ->
+                assertEquals(9L, row.getClientId(),
+                        "ADMIN_V6 #3: seeded rows must carry a mandatory client_id"));
+    }
+
+    @Test
+    void seedSkipsWhenNoClientExistsYetToOwnTheMandatoryClientId() {
+        when(appParamRepository
+                .findByInvestmentTypeAndParamName(FdConstants.FD, FdConstants.BANK))
+                .thenReturn(List.of());
+        when(clientRepository.findByRole("ADMIN")).thenReturn(List.of());
+
+        fdService.seedDefaultBankNames();
+
+        verify(appParamRepository, never()).save(any(AppParamConfig.class));
     }
 }

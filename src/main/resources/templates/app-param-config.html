@@ -9,17 +9,21 @@
         <div class="form-left">
             <form id="bondForm">
                 <div>
+                    <!-- ADMIN_V6 #1.a: options come from app_param_config.investment_type
+                         (fetched from the cached config, rule #2) - not a static list -->
                     <label>Investment Type</label>
-                    <select name="investmentType" required>
-                        <option value="bond">BOND</option>
-                        <option value="fd">FD</option>
-                        <option value="share">SHARE</option>
-                        <option value="equity-mutual-fund">EQUITY MUTUAL FUND-</option>
-                        <option value="debt-mutual-fund">DEBT MUTUAL FUND</option>
-                        <option value="smallcase">SMALLCASE</option>
+                    <select id="investmentTypeSelect" name="investmentType" required>
+                        <option value="">-- Select Investment Type --</option>
                     </select>
                 </div>
-                <div><label>Parameter Name</label><input type="text" name="paramName" required></div>
+                <div>
+                    <!-- ADMIN_V6 #1.b: options are the param_name values already used
+                         for the selected investment type -->
+                    <label>Parameter Name</label>
+                    <select id="paramNameSelect" name="paramName" required>
+                        <option value="">-- Select Investment Type first --</option>
+                    </select>
+                </div>
                 <div><label>Parameter Value</label><input type="text" name="paramValue" required></div>
                 <div>
                     <label>Note</label>

@@ -2,6 +2,8 @@ package com.artech.portfolio.fd.service.impl;
 
 import com.artech.portfolio.auth.service.CurrentUserService;
 import com.artech.portfolio.client.entity.Client;
+import com.artech.portfolio.client.repository.ClientRepository;
+import com.artech.portfolio.client.util.ClientConstants;
 import com.artech.portfolio.common.entity.AppParamConfig;
 import com.artech.portfolio.common.repository.AppParamRepository;
 import com.artech.portfolio.fd.entity.FixedDeposit;
@@ -10,22 +12,30 @@ import com.artech.portfolio.fd.service.FdService;
 import com.artech.portfolio.fd.util.FdCalculator;
 import com.artech.portfolio.fd.util.FdConstants;
 import jakarta.annotation.PostConstruct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 
 @Service
 public class FdServiceImpl implements FdService {
+
+    private static final Logger log = LoggerFactory.getLogger(FdServiceImpl.class);
+
     private final FixedDepositRepository fixedDepositRepository;
     private final AppParamRepository appParamRepository;
     private final CurrentUserService currentUserService;
+    private final ClientRepository clientRepository;
 
     public FdServiceImpl(FixedDepositRepository fixedDepositRepository,
                          AppParamRepository appParamRepository,
-                         CurrentUserService currentUserService) {
+                         CurrentUserService currentUserService,
+                         ClientRepository clientRepository) {
         this.fixedDepositRepository = fixedDepositRepository;
         this.appParamRepository = appParamRepository;
         this.currentUserService = currentUserService;
+        this.clientRepository = clientRepository;
     }
 
     /**
@@ -41,12 +51,25 @@ public class FdServiceImpl implements FdService {
         if (!existing.isEmpty()) {
             return;
         }
+        // ADMIN_V6 #3: client_id is mandatory on every row. Startup has no
+        // signed-in session, so the seeded rows are owned by the first ADMIN
+        // client (the system owner). On a brand-new database with no client
+        // yet, seeding waits - banks can be added from the config screen
+        // once the first admin exists.
+        List<Client> admins = clientRepository.findByRole(ClientConstants.ROLE_ADMIN);
+        if (admins.isEmpty()) {
+            log.info("FD_V1 seed skipped: no ADMIN client exists yet to own the "
+                    + "default bank rows (client_id is mandatory)");
+            return;
+        }
+        Long ownerId = admins.get(0).getId();
         String[] defaultBanks = {
                 "State Bank of India", "HDFC Bank", "ICICI Bank",
                 "Axis Bank", "Punjab National Bank"
         };
         for (String bank : defaultBanks) {
             AppParamConfig config = new AppParamConfig();
+            config.setClientId(ownerId);
             config.setInvestmentType(FdConstants.FD);
             config.setParamName(FdConstants.BANK);
             config.setParamValue(bank);
