@@ -1,0 +1,3 @@
+Modification to 'Bank Deposits' -> 'New Fixed Deposits(FD)' -> 'Fixed Deposit Details Entry', please follow the below rules.
+1. 'tenure' in 'Fixed Deposit Details Entry' is unwanted as there is Fixed Deposit Date and Mature Date so tenure is unwanted, please remove 'Tenure' from 'Fixed Deposit Details Entry' page as well as from 'Fixed Deposit Records' screen and do the backend changes accordingly along with Database changes.
+2. Please do Indian banking Fixed deposit calculation using 'Fixed Deposit Date', 'mature date', 'Fixed Deposit Amount' and ' Fixed Deposit Interest %' and populate the 'Mature Amount' field in 'Fixed Deposit Details Entry'

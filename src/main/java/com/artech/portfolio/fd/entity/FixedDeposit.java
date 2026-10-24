@@ -43,7 +43,8 @@ public class FixedDeposit {
 
     private String bankName;
     private double depositAmount;
-    private int tenureMonths;           // Tenure period in months
+    // FD_V1 #1: 'tenure' removed - the deposit/maturity dates already define
+    // the period (column dropped by FdV1Migration).
     private LocalDate depositDate;
     private LocalDate maturityDate;
     private double interestRate;        // Interest %

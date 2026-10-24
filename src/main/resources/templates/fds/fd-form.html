@@ -13,22 +13,12 @@
                     <label>Bank Name</label>
                     <select id="bankSelect" name="bankName" required></select>
                 </div>
-                <div>
-                    <label>Tenure Period</label>
-                    <select name="tenureMonths" id="tenureSelect" required>
-                        <option value="6">6 Months</option>
-                        <option value="12">1 Year</option>
-                        <option value="24">2 Years</option>
-                        <option value="36">3 Years</option>
-                        <option value="60">5 Years</option>
-                        <option value="120">10 Years</option>
-                    </select>
-                </div>
                 <div><label>Fixed Deposit Date</label><input type="date" id="depositDate" name="depositDate" required></div>
                 <div><label>Mature Date</label><input type="date" id="maturityDate" name="maturityDate" required></div>
                 <div><label>Fixed Deposit Amount</label><input type="number" id="depositAmount" name="depositAmount" min="1" step="0.01" required></div>
-                <div><label>Interest %</label><input type="number" id="interestRate" name="interestRate" min="0" step="0.01" required></div>
-                <div><label>Mature Amount</label><input type="number" id="maturityAmount" name="maturityAmount" min="0" step="0.01" required></div>
+                <div><label>Fixed Deposit Interest %</label><input type="number" id="interestRate" name="interestRate" min="0" step="0.01" required></div>
+                <!-- FD_V1 #2: auto-populated from the dates, amount and interest % (quarterly compounding) -->
+                <div><label>Mature Amount</label><input type="number" id="maturityAmount" name="maturityAmount" min="0" step="0.01" readonly></div>
                 <div><label>Notes</label><textarea name="notes"></textarea></div>
                 <button type="submit" id="saveBtn" class="primary">Save Fixed Deposit</button>
             </form>
@@ -38,17 +28,16 @@
         <div class="form-right">
             <div class="calculation-card">
                 <h3>Live Calculations</h3>
+                <!-- FD_V1 #2: Indian banking calc - interest compounds quarterly, so the
+                     figures here are the bank's actual calculation, not a simple-interest guess -->
                 <div class="total-display-group">
-                    <label for="interestEstimate">Estimated Interest (simple)</label>
+                    <label for="interestEstimate">Interest Earned (quarterly compounded)</label>
                     <input type="number" id="interestEstimate" readonly placeholder="0">
                 </div>
                 <div class="total-display-group">
                     <label for="maturityEstimate">Estimated Mature Amount</label>
                     <input type="number" id="maturityEstimate" readonly placeholder="0">
                 </div>
-                <button type="button" id="applyEstimateBtn" class="primary" style="margin-top:12px;">
-                    Apply Estimate to Mature Amount
-                </button>
             </div>
 
             <div class="calculation-card" id="closureCard" style="display:none;">

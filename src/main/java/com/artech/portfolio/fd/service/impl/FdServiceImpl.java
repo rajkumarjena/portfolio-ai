@@ -7,6 +7,7 @@ import com.artech.portfolio.common.repository.AppParamRepository;
 import com.artech.portfolio.fd.entity.FixedDeposit;
 import com.artech.portfolio.fd.repository.FixedDepositRepository;
 import com.artech.portfolio.fd.service.FdService;
+import com.artech.portfolio.fd.util.FdCalculator;
 import com.artech.portfolio.fd.util.FdConstants;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Service;
@@ -64,6 +65,7 @@ public class FdServiceImpl implements FdService {
         // the request body is ignored (reset() also detaches a lazy-loaded one).
         fixedDeposit.setId(null);
         fixedDeposit.setClient(currentUserService.requireClient());
+        applyMaturityCalculation(fixedDeposit);
         return fixedDepositRepository.save(fixedDeposit);
     }
 
@@ -89,7 +91,6 @@ public class FdServiceImpl implements FdService {
         return loadOwned(id).map(fd -> {
             fd.setBankName(fixedDepositDetails.getBankName());
             fd.setDepositAmount(fixedDepositDetails.getDepositAmount());
-            fd.setTenureMonths(fixedDepositDetails.getTenureMonths());
             fd.setDepositDate(fixedDepositDetails.getDepositDate());
             fd.setMaturityDate(fixedDepositDetails.getMaturityDate());
             fd.setInterestRate(fixedDepositDetails.getInterestRate());
@@ -102,6 +103,7 @@ public class FdServiceImpl implements FdService {
             // owner never changes on update
 
             validate(fd);
+            applyMaturityCalculation(fd);
             return fixedDepositRepository.save(fd);
         }).orElseThrow(() -> new RuntimeException("Fixed deposit not found with id " + id));
     }
@@ -142,5 +144,16 @@ public class FdServiceImpl implements FdService {
                 && fd.getMaturityDate().isBefore(fd.getDepositDate())) {
             throw new RuntimeException("Maturity date must be on or after deposit date");
         }
+    }
+
+    /**
+     * FD_V1 #2: the maturity amount is always recomputed server-side with the
+     * Indian quarterly-compounding formula, so a client-supplied value can
+     * never drift from the bank's actual calculation.
+     */
+    private void applyMaturityCalculation(FixedDeposit fd) {
+        fd.setMaturityAmount(FdCalculator.maturityAmount(
+                fd.getDepositAmount(), fd.getInterestRate(),
+                fd.getDepositDate(), fd.getMaturityDate()));
     }
 }

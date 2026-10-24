@@ -1,11 +1,6 @@
 const pageSize = 20;
 let allFds = [];
 
-function tenureLabel(months) {
-    if (months % 12 === 0) return `${months / 12} Year${months > 12 ? 's' : ''}`;
-    return `${months} Months`;
-}
-
 async function loadBankFilter() {
     try {
         const response = await fetch('/api/fds/banks');
@@ -56,7 +51,6 @@ function renderTable(data) {
                 <td>${fd.id}</td>
                 <td>${fd.bankName}</td>
                 <td>${fd.depositAmount}</td>
-                <td>${tenureLabel(fd.tenureMonths)}</td>
                 <td>${fd.depositDate}</td>
                 <td>${fd.maturityDate}</td>
                 <td>${fd.interestRate}</td>
@@ -93,7 +87,6 @@ function renderSummary(data) {
 function applyFilter() {
     const bank = document.getElementById('filterBank').value;
     const status = document.getElementById('filterStatus').value;
-    const tenure = document.getElementById('filterTenure').value;
     const depositFrom = document.getElementById('filterDepositFrom').value;
     const depositTo = document.getElementById('filterDepositTo').value;
     const maturityFrom = document.getElementById('filterMaturityFrom').value;
@@ -106,7 +99,6 @@ function applyFilter() {
     const filtered = allFds.filter(fd => {
         if (bank && fd.bankName !== bank) return false;
         if (status && fd.status !== status) return false;
-        if (tenure && String(fd.tenureMonths) !== tenure) return false;
         if (depositFrom && fd.depositDate < depositFrom) return false;
         if (depositTo && fd.depositDate > depositTo) return false;
         if (maturityFrom && fd.maturityDate < maturityFrom) return false;
