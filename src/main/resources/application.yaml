@@ -109,7 +109,7 @@ app:
   maintenance:
     drain-ms: 8000
   # Base URL used in password-reset emails (AUTH.md h)
-  base-url: http://localhost:8081
+  base-url: http://129.225.96.100:8081
   mail:
     from: kiit2005@gmail.com
 

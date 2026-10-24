@@ -7,8 +7,8 @@ const fdId = urlParams.get('id');
 
 const form = document.getElementById('fdForm');
 const depositAmountInput = document.getElementById('depositAmount');
-const tenureSelect = document.getElementById('tenureSelect');
 const interestRateInput = document.getElementById('interestRate');
+const maturityAmountInput = document.getElementById('maturityAmount');
 const depositDateInput = document.getElementById('depositDate');
 const maturityDateInput = document.getElementById('maturityDate');
 
@@ -48,29 +48,41 @@ async function loadBanks() {
     }
 }
 
+/**
+ * FD_V1 #2: Indian banking fixed-deposit calculation. Interest compounds
+ * QUARTERLY, so the maturity amount is P * (1 + R/400)^(4 * years), with the
+ * tenure derived from the deposit and maturity DATES (the redundant 'tenure'
+ * field is gone). Mirrors FdCalculator on the server, which recomputes and
+ * stores the authoritative value on save.
+ */
 function calculateEstimate() {
     const amount = parseFloat(depositAmountInput?.value) || 0;
     const rate = parseFloat(interestRateInput?.value) || 0;
-    const months = parseInt(tenureSelect?.value, 10) || 0;
+    const depositDate = depositDateInput?.value ? new Date(depositDateInput.value) : null;
+    const maturityDate = maturityDateInput?.value ? new Date(maturityDateInput.value) : null;
 
-    // Simple interest estimate: P * r * t / 100
-    const interest = amount * rate * (months / 12) / 100;
-    const maturity = amount + interest;
+    let interest = 0;
+    let maturity = amount;
+    if (amount > 0 && depositDate && maturityDate && maturityDate >= depositDate) {
+        // Actual days / 365, same convention as the backend
+        const days = Math.round((maturityDate - depositDate) / 86400000);
+        const years = days / 365;
+        maturity = Math.round(amount * Math.pow(1 + rate / 400, 4 * years) * 100) / 100;
+        interest = Math.round((maturity - amount) * 100) / 100;
+    }
 
     document.getElementById('interestEstimate').value = interest ? interest.toFixed(2) : '';
-    document.getElementById('maturityEstimate').value = maturity ? maturity.toFixed(2) : '';
+    document.getElementById('maturityEstimate').value = maturity > amount ? maturity.toFixed(2) : '';
+    // Mature Amount is populated automatically (#2) and read-only in the form
+    if (maturityAmountInput && !maturityAmountInput.disabled) {
+        maturityAmountInput.value = maturity > amount ? maturity.toFixed(2) : '';
+    }
 }
 
 if (depositAmountInput) depositAmountInput.addEventListener('input', calculateEstimate);
 if (interestRateInput) interestRateInput.addEventListener('input', calculateEstimate);
-if (tenureSelect) tenureSelect.addEventListener('change', calculateEstimate);
-
-document.getElementById('applyEstimateBtn').addEventListener('click', () => {
-    const estimate = document.getElementById('maturityEstimate').value;
-    if (estimate) {
-        document.getElementById('maturityAmount').value = estimate;
-    }
-});
+if (depositDateInput) depositDateInput.addEventListener('change', calculateEstimate);
+if (maturityDateInput) maturityDateInput.addEventListener('change', calculateEstimate);
 
 // If editing, fetch FD data and populate form
 if (fdId && form) {
@@ -117,8 +129,7 @@ if (form) {
         const formData = new FormData(this);
         const fd = {};
         formData.forEach((value, key) => {
-            if (key === 'tenureMonths') fd[key] = parseInt(value, 10);
-            else if (['depositAmount', 'interestRate', 'maturityAmount'].includes(key)) fd[key] = parseFloat(value);
+            if (['depositAmount', 'interestRate', 'maturityAmount'].includes(key)) fd[key] = parseFloat(value);
             else fd[key] = value;
         });
 
@@ -169,7 +180,6 @@ document.getElementById('closeFdBtn').addEventListener('click', () => {
 
     const fd = Object.fromEntries(new FormData(form));
     fd.id = currentFd.id;
-    fd.tenureMonths = parseInt(fd.tenureMonths, 10);
     fd.depositAmount = parseFloat(fd.depositAmount);
     fd.interestRate = parseFloat(fd.interestRate);
     fd.maturityAmount = parseFloat(fd.maturityAmount);

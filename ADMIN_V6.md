@@ -1,0 +1,8 @@
+Enrich Application Parameter Configuration with below rules.
+1. Enrich 'Add Application Parameter' -> 'Application Parameter Configuration' with below rules
+    a. Make 'Add Application Parameter' -> 'Application Parameter Configuration' -> 'Investment Type' drop-down value from backend table 'app_param_config' and column 'investment_type', currently its static, so make it dynamic.
+    b. Make 'Parameter Name' in screen 'Add Application Parameter' -> 'Application Parameter Configuration' as drop-down from open text field, populate values from backend table 'app_param_config' and column 'param_name' of corresponding 'investment_type'.
+2. Both above 1.a and 1.b values are already  pulled from backend through AppParamController.java and cachedConfig parameter, hence no need to do database query, only modify user interface and populate values from cachedConfig.
+3. Add a new attribute called client_id, which is integer data type, in entity AppParamConfig.java also make it mandatory, when new config saved by any client, new parameter client_id should be saved to app_param_config table 
+4. As already config records are there in running system where client_id column is not be there, admin will create new column client_id in app_param_config table and make it mandatory with feeding client data against each record in it before deploy the above changes by executing alter table then update sql query in production so no need to add additional code for it, as it will be deployment pre-requisite.
+5. client_id is the already system logged-in client's id, so pass the client_id i.e. id column value of client table to the backend app_param_config table for new application parameter.

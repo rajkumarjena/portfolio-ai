@@ -1,5 +1,6 @@
 package com.artech.portfolio.client.service.impl;
 
+import com.artech.portfolio.auth.service.CurrentUserService;
 import com.artech.portfolio.client.dto.ClientSearchResult;
 import com.artech.portfolio.client.entity.Client;
 import com.artech.portfolio.client.entity.ClientEmail;
@@ -30,6 +31,7 @@ import static org.mockito.Mockito.*;
 class ClientFamilyMemberTest {
 
     private ClientRepository clientRepository;
+    private CurrentUserService currentUserService;
     private ClientServiceImpl clientService;
 
     private Client owner;
@@ -38,7 +40,8 @@ class ClientFamilyMemberTest {
     @BeforeEach
     void setUp() {
         clientRepository = mock(ClientRepository.class);
-        clientService = new ClientServiceImpl(clientRepository);
+        currentUserService = mock(CurrentUserService.class);
+        clientService = new ClientServiceImpl(clientRepository, currentUserService);
 
         owner = new Client();
         owner.setId(1L);
@@ -175,6 +178,30 @@ class ClientFamilyMemberTest {
 
         assertEquals(HttpStatus.NOT_FOUND.value(), ex.getStatusCode().value());
         verify(clientRepository, never()).save(any(Client.class));
+    }
+
+    // --------------------------------------- ADMIN_V5 #1 client-view scoping
+
+    @Test
+    void adminSeesEveryClientOnTheClientViewScreen() {
+        when(currentUserService.isAdmin()).thenReturn(true);
+        when(clientRepository.findAll()).thenReturn(List.of(owner, member));
+
+        List<Client> visible = clientService.getAllClients();
+
+        assertEquals(2, visible.size());
+        verify(clientRepository).findAll();
+    }
+
+    @Test
+    void userOrSupervisorSeesOnlyThemselvesOnTheClientViewScreen() {
+        when(currentUserService.isAdmin()).thenReturn(false);
+        when(currentUserService.currentClient()).thenReturn(owner);
+
+        List<Client> visible = clientService.getAllClients();
+
+        assertEquals(List.of(owner), visible, "ADMIN_V5 #1.a: self only");
+        verify(clientRepository, never()).findAll();
     }
 
     // ------------------------------------------ generic save/update stay safe

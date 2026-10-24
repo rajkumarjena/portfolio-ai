@@ -1,5 +1,6 @@
 package com.artech.portfolio.client.service.impl;
 
+import com.artech.portfolio.auth.service.CurrentUserService;
 import com.artech.portfolio.client.dto.ClientSearchResult;
 import com.artech.portfolio.client.entity.Client;
 import com.artech.portfolio.client.entity.ClientFamilyMember;
@@ -25,9 +26,12 @@ public class ClientServiceImpl implements ClientService {
     private static final int MAX_CLIENT_SEARCH_RESULTS = 20;
 
     private final ClientRepository clientRepository;
+    private final CurrentUserService currentUserService;
 
-    public ClientServiceImpl(ClientRepository clientRepository) {
+    public ClientServiceImpl(ClientRepository clientRepository,
+                             CurrentUserService currentUserService) {
         this.clientRepository = clientRepository;
+        this.currentUserService = currentUserService;
     }
 
     @Override
@@ -51,7 +55,14 @@ public class ClientServiceImpl implements ClientService {
 
     @Override
     public List<Client> getAllClients() {
-        return clientRepository.findAll();
+        // ADMIN_V5 #1: the "Client View" list is self-service for USER and
+        // SUPERVISOR - only an ADMIN sees every client. (The family-member
+        // type-ahead is a separate endpoint and stays unrestricted - rule 2.)
+        if (currentUserService.isAdmin()) {
+            return clientRepository.findAll();
+        }
+        Client me = currentUserService.currentClient();
+        return me == null ? List.of() : List.of(me);
     }
 
     @Override
