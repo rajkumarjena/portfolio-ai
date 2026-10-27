@@ -1,944 +1,796 @@
 package com.artech.portfolio.mf.service.impl;
 
-import com.artech.portfolio.client.entity.Client;
-import com.artech.portfolio.client.repository.ClientRepository;
-import com.artech.portfolio.mf.entity.MfHeader;
 import com.artech.portfolio.mf.entity.MfImportBatch;
-import com.artech.portfolio.mf.entity.MfImportLine;
-import com.artech.portfolio.mf.entity.MfScheme;
-import com.artech.portfolio.mf.entity.MfTransaction;
-import com.artech.portfolio.mf.parser.CasReportParser;
-import com.artech.portfolio.mf.parser.CsvCasParser;
-import com.artech.portfolio.mf.parser.ParsedCasReport;
-import com.artech.portfolio.mf.parser.PdfCasParser;
-import com.artech.portfolio.mf.parser.XlsxCasParser;
-import com.artech.portfolio.mf.repository.MfHeaderRepository;
+import com.artech.portfolio.mf.entity.MfFolio;
+import com.artech.portfolio.mf.entity.MfFolioScheme;
+import com.artech.portfolio.mf.entity.MfFolioSchemeNominee;
+import com.artech.portfolio.mf.entity.MfFolioSchemeTransaction;
+import com.artech.portfolio.mf.entity.MfFolioSchemeValuation;
+import com.artech.portfolio.mf.entity.MfPortfolioSummary;
+import com.artech.portfolio.mf.entity.tmp.MfTmpFolio;
+import com.artech.portfolio.mf.entity.tmp.MfTmpNominee;
+import com.artech.portfolio.mf.entity.tmp.MfTmpPortfolioSummary;
+import com.artech.portfolio.mf.entity.tmp.MfTmpScheme;
+import com.artech.portfolio.mf.entity.tmp.MfTmpTransaction;
+import com.artech.portfolio.mf.entity.tmp.MfTmpValuation;
+import com.artech.portfolio.mf.parser.KfCasParser;
+import com.artech.portfolio.mf.parser.KfCasReport;
+import com.artech.portfolio.mf.parser.TxnClassifier;
+import com.artech.portfolio.mf.repository.MfFolioRepository;
+import com.artech.portfolio.mf.repository.MfFolioSchemeNomineeRepository;
+import com.artech.portfolio.mf.repository.MfFolioSchemeRepository;
+import com.artech.portfolio.mf.repository.MfFolioSchemeTransactionRepository;
+import com.artech.portfolio.mf.repository.MfFolioSchemeValuationRepository;
 import com.artech.portfolio.mf.repository.MfImportBatchRepository;
-import com.artech.portfolio.mf.repository.MfImportLineRepository;
-import com.artech.portfolio.mf.repository.MfSchemeRepository;
-import com.artech.portfolio.mf.repository.MfTransactionRepository;
+import com.artech.portfolio.mf.repository.MfPortfolioSummaryRepository;
+import com.artech.portfolio.mf.repository.tmp.MfTmpFolioRepository;
+import com.artech.portfolio.mf.repository.tmp.MfTmpNomineeRepository;
+import com.artech.portfolio.mf.repository.tmp.MfTmpPortfolioSummaryRepository;
+import com.artech.portfolio.mf.repository.tmp.MfTmpSchemeRepository;
+import com.artech.portfolio.mf.repository.tmp.MfTmpTransactionRepository;
+import com.artech.portfolio.mf.repository.tmp.MfTmpValuationRepository;
 import com.artech.portfolio.mf.service.MfImportService;
-import com.artech.portfolio.mf.util.MfConstants;
-import com.artech.portfolio.mf.util.MfUtil;
+import com.artech.portfolio.mf.util.MfTxnIdentity;
 import tools.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
 
 /**
- * Reconciliation workflow behind the MF Central import screens (MF.md 14-16,
- * 20, 22, 23, 25).
+ * KFINTECH CAS upload (MF.md 1-3, 9, 10, 16, 17).
  *
- *   upload  -> parse into MfImportLine rows (nothing touches the portfolio)
- *   validate-> header/detail level checks, dedupe, color codes
- *   remap   -> point unregistered schemes at the master list
- *   accept  -> only now MfHeader / MfTransaction are written
+ * <p>The statement is read completely before a single row is written: the
+ * temporary tables are only emptied once the pdf has been parsed successfully,
+ * so a report that cannot be read leaves the last good upload in place
+ * (MF.md 9). A first import additionally gets the ADJUSTED ledger rows that
+ * close the gap between the 5 year ledger and the statement's own current
+ * totals (MF.md 10).</p>
  */
 @Service
 public class MfImportServiceImpl implements MfImportService {
 
-    private static final double TOTAL_TOL = 0.005; // 0.5% / 1 rupee whichever is larger
+    /** Description of the rows the first import adds (MF.md 10). */
+    static final String ADJUSTED_DESCRIPTION = "ADJUSTED UNIT, AMOUNT TRANSACTION";
+
+    /** Statement dates are printed as "25-Oct-2026". */
+    private static final java.time.format.DateTimeFormatter PRINTED_DATE =
+            java.time.format.DateTimeFormatter.ofPattern("dd-MMM-yyyy", Locale.ENGLISH);
+
+    private static final BigDecimal ZERO = BigDecimal.ZERO;
 
     private final MfImportBatchRepository batchRepository;
-    private final MfImportLineRepository lineRepository;
-    private final MfSchemeRepository schemeRepository;
-    private final MfHeaderRepository headerRepository;
-    private final MfTransactionRepository transactionRepository;
-    private final ClientRepository clientRepository;
+
+    private final MfTmpPortfolioSummaryRepository tmpSummaryRepository;
+    private final MfTmpFolioRepository tmpFolioRepository;
+    private final MfTmpSchemeRepository tmpSchemeRepository;
+    private final MfTmpNomineeRepository tmpNomineeRepository;
+    private final MfTmpValuationRepository tmpValuationRepository;
+    private final MfTmpTransactionRepository tmpTransactionRepository;
+
+    private final MfPortfolioSummaryRepository summaryRepository;
+    private final MfFolioRepository folioRepository;
+    private final MfFolioSchemeRepository schemeRepository;
+    private final MfFolioSchemeNomineeRepository nomineeRepository;
+    private final MfFolioSchemeValuationRepository valuationRepository;
+    private final MfFolioSchemeTransactionRepository transactionRepository;
+
+    private final TransactionTemplate transactions;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public MfImportServiceImpl(MfImportBatchRepository batchRepository,
-                               MfImportLineRepository lineRepository,
-                               MfSchemeRepository schemeRepository,
-                               MfHeaderRepository headerRepository,
-                               MfTransactionRepository transactionRepository,
-                               ClientRepository clientRepository) {
+                               MfTmpPortfolioSummaryRepository tmpSummaryRepository,
+                               MfTmpFolioRepository tmpFolioRepository,
+                               MfTmpSchemeRepository tmpSchemeRepository,
+                               MfTmpNomineeRepository tmpNomineeRepository,
+                               MfTmpValuationRepository tmpValuationRepository,
+                               MfTmpTransactionRepository tmpTransactionRepository,
+                               MfPortfolioSummaryRepository summaryRepository,
+                               MfFolioRepository folioRepository,
+                               MfFolioSchemeRepository schemeRepository,
+                               MfFolioSchemeNomineeRepository nomineeRepository,
+                               MfFolioSchemeValuationRepository valuationRepository,
+                               MfFolioSchemeTransactionRepository transactionRepository,
+                               PlatformTransactionManager transactionManager) {
         this.batchRepository = batchRepository;
-        this.lineRepository = lineRepository;
+        this.tmpSummaryRepository = tmpSummaryRepository;
+        this.tmpFolioRepository = tmpFolioRepository;
+        this.tmpSchemeRepository = tmpSchemeRepository;
+        this.tmpNomineeRepository = tmpNomineeRepository;
+        this.tmpValuationRepository = tmpValuationRepository;
+        this.tmpTransactionRepository = tmpTransactionRepository;
+        this.summaryRepository = summaryRepository;
+        this.folioRepository = folioRepository;
         this.schemeRepository = schemeRepository;
-        this.headerRepository = headerRepository;
+        this.nomineeRepository = nomineeRepository;
+        this.valuationRepository = valuationRepository;
         this.transactionRepository = transactionRepository;
-        this.clientRepository = clientRepository;
+        this.transactions = new TransactionTemplate(transactionManager);
     }
 
     // ----------------------------------------------------------------- upload
 
     @Override
-    @Transactional
-    public Map<String, Object> importFile(String pan, String fileName, byte[] data) {
-        if (data == null || data.length == 0) {
-            throw new RuntimeException("The uploaded file is empty");
-        }
-        String type = CasReportParser.detectType(fileName);
-        CasReportParser parser = switch (type) {
-            case MfConstants.FILE_XLSX -> new XlsxCasParser();
-            case MfConstants.FILE_PDF -> new PdfCasParser();
-            default -> new CsvCasParser();
-        };
-        ParsedCasReport rep;
-        try {
-            rep = parser.parse(fileName, data);
-        } catch (Exception e) {
-            throw new RuntimeException("Could not read " + type + " report: " + e.getMessage());
-        }
+    public Map<String, Object> importFile(String ownerPan, String fileName, byte[] data, String password) {
+        // Read first, write later: a protected or unreadable file never touches
+        // the temporary tables (MF.md 3/9).
+        KfCasReport report = parse(data, password);
+        // MF_V3 4 - a statement only belongs to the client whose PAN it carries.
+        checkOwnerPan(ownerPan, report);
+        String json = toJson(report);
+
+        Staging staging = transactions.execute(status -> stage(ownerPan, report));
 
         MfImportBatch batch = new MfImportBatch();
-        batch.setPan(pan);
+        batch.setPan(ownerPan);
         batch.setFileName(fileName);
-        batch.setFileType(type);
-        batch.setReportFrom(rep.reportFrom);
-        batch.setReportTo(rep.reportTo);
-        batch.setClientName(rep.clientName);
-        batch.setReportPan(rep.pan);
-        batch.setRptInvested(rep.rptInvested);
-        batch.setRptCurrent(rep.rptCurrent);
-        batch.setRptProfit(rep.rptProfit);
-        batch.setRptUnits(rep.rptUnits);
-        batch.setRptHoldingsCount(rep.holdings.size());
-        batch.setRptTxnCount(rep.transactions.size());
-        batch = batchRepository.save(batch);
-
-        // scheme -> (amc, folio) as printed in this statement, for enriching
-        // transaction rows which only carry the scheme name
-        Map<String, ParsedCasReport.Holding> byScheme = new HashMap<>();
-        for (ParsedCasReport.Holding h : rep.holdings) {
-            byScheme.putIfAbsent(h.schemeName.toLowerCase(Locale.ROOT), h);
-        }
-
-        List<MfImportLine> lines = new ArrayList<>();
-        int no = 0;
-        Set<String> seen = new HashSet<>();
-        for (ParsedCasReport.Holding h : rep.holdings) {
-            MfImportLine l = new MfImportLine();
-            l.setBatchId(batch.getId());
-            l.setLineNo(++no);
-            l.setLineType(MfConstants.LINE_HOLDING);
-            l.setSchemeName(trim(h.schemeName));
-            l.setAmcName(trim(h.amcName));
-            l.setCategory(trim(h.category));
-            l.setFolioNo(trim(h.folioNo));
-            l.setInvestedValue(h.invested);
-            l.setCurrentValue(h.current);
-            l.setReturns(h.ret);
-            l.setUnits(h.units);
-            l.setDedupeKey(MfUtil.dedupeKey(pan, l.getSchemeName(), l.getAmcName(), l.getFolioNo(),
-                    null, MfConstants.LINE_HOLDING, l.getUnits(), l.getInvestedValue()));
-            lines.add(l);
-        }
-        for (ParsedCasReport.Txn t : rep.transactions) {
-            MfImportLine l = new MfImportLine();
-            l.setBatchId(batch.getId());
-            l.setLineNo(++no);
-            l.setLineType(MfConstants.LINE_TRANSACTION);
-            l.setSchemeName(trim(t.schemeName));
-            l.setDescription(trim(t.description));
-            l.setTxnDate(t.date);
-            l.setNav(t.nav);
-            l.setUnits(t.units);
-            l.setAmount(t.amount);
-            l.setTxnType(inferTxnType(t.description, t.units, t.amount));
-
-            // enrich amc/category from this statement's holdings of that scheme
-            ParsedCasReport.Holding src = byScheme.getOrDefault(
-                    l.getSchemeName().toLowerCase(Locale.ROOT), null);
-            if (src != null) {
-                l.setAmcName(trim(src.amcName));
-                l.setCategory(trim(src.category));
-            } else {
-                List<MfScheme> byName = schemeRepository.findBySchemeNameIgnoreCase(l.getSchemeName());
-                if (byName.size() == 1) {
-                    l.setAmcName(byName.get(0).getAmcName());
-                }
-            }
-            // folio: exact when the format carries it (PDF prints folio sections);
-            // the xlsx/csv transaction sheets have no folio column, so they fall
-            // back to the scheme's first holding (best effort for that format)
-            if (t.folioNo != null && !t.folioNo.isBlank()) {
-                l.setFolioNo(trim(t.folioNo));
-            } else if (src != null) {
-                l.setFolioNo(trim(src.folioNo));
-            }
-            // normalise outflows so aggregates reduce correctly (MF.md 10)
-            if (MfConstants.TXN_REDEMPTION.equals(l.getTxnType())
-                    || MfConstants.TXN_SWITCH_OUT.equals(l.getTxnType())) {
-                if (l.getUnits() > 0) l.setUnits(-l.getUnits());
-                if (l.getAmount() > 0) l.setAmount(-l.getAmount());
-            }
-            l.setDedupeKey(MfUtil.dedupeKey(pan, l.getSchemeName(), l.getAmcName(), l.getFolioNo(),
-                    l.getTxnDate(), l.getTxnType(), l.getUnits(), l.getAmount()));
-            lines.add(l);
-        }
-        lineRepository.saveAll(lines);
-
-        return validate(batch.getId(), pan);
-    }
-
-    // ----------------------------------------------------------------- lookup
-
-    @Override
-    public List<MfImportBatch> listBatches(String pan) {
-        return batchRepository.findByPanOrderByUploadedAtDesc(pan);
-    }
-
-    @Override
-    public Map<String, Object> getBatch(Long id, String pan) {
-        MfImportBatch batch = loadBatch(id, pan);
-        List<MfImportLine> lines = lineRepository.findByBatchIdOrderByLineNoAsc(id);
-        return buildResponse(batch, lines, pan);
-    }
-
-    @Override
-    public void discard(Long id, String pan) {
-        MfImportBatch batch = loadBatch(id, pan);
-        if (MfConstants.BATCH_ACCEPTED.equals(batch.getStatus())) {
-            throw new RuntimeException("An accepted batch cannot be discarded - its rows are already in the portfolio");
-        }
-        for (MfImportLine l : lineRepository.findByBatchIdOrderByLineNoAsc(id)) {
-            lineRepository.delete(l);
-        }
-        batchRepository.delete(batch);
-    }
-
-    // --------------------------------------------------------------- validate
-
-    @Override
-    @Transactional
-    public Map<String, Object> validate(Long id, String pan) {
-        MfImportBatch batch = loadBatch(id, pan);
-        List<MfImportLine> lines = lineRepository.findByBatchIdOrderByLineNoAsc(id);
-        Set<String> seenInReport = new HashSet<>();
-
-        int nNew = 0, nExists = 0, nNewScheme = 0, nMapped = 0, nError = 0, nSkipped = 0;
-        int holding = 0, txnLines = 0;
-
-        for (MfImportLine l : lines) {
-            if (MfConstants.LINE_HOLDING.equals(l.getLineType())) holding++;
-            else txnLines++;
-
-            if (MfConstants.LINE_ERROR.equals(l.getStatus())) {
-                nError++;
-                continue;
-            }
-            if (l.getTargetSchemeId() != null) {
-                l.setStatus(MfConstants.LINE_MAPPED);
-                schemeRepository.findById(l.getTargetSchemeId()).ifPresent(s ->
-                        l.setMessage("Remapped to " + s.getSchemeName() + " (" + s.getAmcName() + ")"));
-                nMapped++;
-                continue;
-            }
-            classify(pan, l, seenInReport);
-            switch (l.getStatus()) {
-                case MfConstants.LINE_NEW -> nNew++;
-                case MfConstants.LINE_EXISTS -> nExists++;
-                case MfConstants.LINE_NEW_SCHEME -> nNewScheme++;
-                case MfConstants.LINE_SKIPPED -> nSkipped++;
-                default -> nError++;
-            }
-        }
-        lineRepository.saveAll(lines);
-
-        batch.setNewCount(nNew);
-        batch.setExistsCount(nExists);
-        batch.setNewSchemeCount(nNewScheme);
-        batch.setMappedCount(nMapped);
-        batch.setErrorCount(nError);
-        batch.setHoldingCount(holding);
-        batch.setTxnLineCount(txnLines);
-
-        // ---- header level checks (MF.md 15) --------------------------------
-        double inv = 0, cur = 0, units = 0;
-        for (MfImportLine l : lines) {
-            if (!MfConstants.LINE_HOLDING.equals(l.getLineType())) continue;
-            if (MfConstants.LINE_ERROR.equals(l.getStatus())) continue;
-            inv += l.getInvestedValue();
-            cur += l.getCurrentValue();
-            units += l.getUnits();
-        }
-        List<Map<String, Object>> checks = new ArrayList<>();
-        if (batch.getRptInvested() != 0) {
-            checks.add(totalCheck("Total investments vs report header",
-                    batch.getRptInvested(), inv));
-        }
-        if (batch.getRptCurrent() != 0) {
-            checks.add(totalCheck("Current portfolio value vs report header",
-                    batch.getRptCurrent(), cur));
-        }
-        if (batch.getRptProfit() != 0) {
-            checks.add(totalCheck("Profit / loss vs report header",
-                    batch.getRptProfit(), cur - inv));
-        }
-        if (batch.getRptInvested() == 0 && batch.getRptCurrent() == 0) {
-            checks.add(check("Report header totals", "INFO",
-                    "-", "-", "This statement does not print header totals - review the rows below"));
-        }
-        checks.add(check("Rows parsed", "INFO",
-                String.valueOf(batch.getRptHoldingsCount() + batch.getRptTxnCount()),
-                String.valueOf(lines.size()),
-                "Holdings rows: " + holding + ", transaction rows: " + txnLines));
-        checks.add(check("Units total", "INFO", "-", MfUtil.roundUnits(units) + "",
-                "Sum of units across all holding rows"));
-        checks.add(check("Duplicates (no double entry)", "PASS",
-                "0 duplicates created",
-                nExists + " row(s) already known",
-                nExists > 0
-                        ? "Existing rows are marked grey and will be skipped on accept (MF.md 22)"
-                        : "No existing entries found - nothing to duplicate"));
-        if (nNewScheme > 0) {
-            checks.add(check("Unregistered schemes", "WARN",
-                    "0", String.valueOf(nNewScheme),
-                    nNewScheme + " row(s) use schemes not in the registered list - remap them, "
-                            + "or they will be registered on accept (MF.md 20)"));
-        }
-        if (nSkipped > 0) {
-            checks.add(check("Empty rows", "INFO",
-                    "0", String.valueOf(nSkipped),
-                    nSkipped + " row(s) with no units or amount (empty holdings / service notes) "
-                            + "- ignored on accept, nothing to import"));
-        }
-        if (MfConstants.FILE_PDF.equals(batch.getFileType())) {
-            checks.add(check("Cost basis", "INFO",
-                    "report Investment column",
-                    batch.getRptInvested() > 0 ? String.valueOf(batch.getRptInvested()) : "not printed",
-                    "PDF statements print units and market value but no cost basis - invested value of a "
-                            + "new holding is estimated from its transaction history; an xlsx import "
-                            + "replaces it with the exact figure"));
-        }
-        if (nError > 0) {
-            checks.add(check("Unreadable rows", "FAIL",
-                    "0", String.valueOf(nError),
-                    nError + " row(s) could not be read - check them in the row list"));
-        }
-        if (batch.getReportPan() != null && !batch.getReportPan().isBlank()
-                && !batch.getReportPan().equalsIgnoreCase(pan)) {
-            checks.add(check("Statement PAN", "WARN", pan, batch.getReportPan(),
-                    "Statement belongs to a different PAN - rows will be filed under your login PAN"));
-        }
-
-        boolean fail = checks.stream().anyMatch(c -> "FAIL".equals(c.get("severity")));
-        boolean warn = checks.stream().anyMatch(c -> "WARN".equals(c.get("severity")));
-        batch.setValidStatus(fail ? MfConstants.VALID_RED : warn ? MfConstants.VALID_AMBER : MfConstants.VALID_GREEN);
-        try {
-            batch.setValidationDetails(mapper.writeValueAsString(checks));
-        } catch (Exception e) {
-            batch.setValidationDetails("[]");
-        }
+        batch.setFileType(report.fileType);
+        batch.setReportFrom(printedDate(report.statementPeriod.from));
+        batch.setReportTo(printedDate(report.statementPeriod.to));
+        batch.setClientName(report.investorInfo.name);
+        batch.setParsedJson(json);
+        batch.setFolioCount(staging.folios());
+        batch.setSchemeCount(staging.schemes());
+        batch.setTxnCount(staging.txns());
+        batch.setAdjustedCount(staging.adjusted());
         batchRepository.save(batch);
 
-        return buildResponse(batch, lines, pan);
+        return Map.of("batch", batch,
+                "firstImport", staging.firstImport(),
+                "warnings", report.parseWarnings);
     }
 
-    // ------------------------------------------------------------------ remap
+    /**
+     * MF_V3 4 - the PAN printed on the statement's folios must be the PAN of
+     * the signed in client. The comparison ignores the case the statement
+     * prints it in; a statement without a PAN cannot be checked, so it is
+     * accepted rather than blocked.
+     */
+    static void checkOwnerPan(String ownerPan, KfCasReport report) {
+        Set<String> statementPans = new LinkedHashSet<>();
+        for (KfCasReport.Folio folio : report.folios) {
+            if (folio.pan != null && !folio.pan.isBlank()) {
+                statementPans.add(folio.pan.trim());
+            }
+        }
+        if (statementPans.isEmpty() || ownerPan == null || ownerPan.isBlank()) {
+            return;
+        }
+        for (String pan : statementPans) {
+            if (pan.equalsIgnoreCase(ownerPan.trim())) {
+                return;
+            }
+        }
+        throw new RuntimeException("This Mutual Fund statement belongs to PAN "
+                + String.join(", ", statementPans)
+                + ", so it cannot be uploaded by the account you are signed in with ("
+                + ownerPan + ").");
+    }
 
     @Override
-    @Transactional
-    public Map<String, Object> remap(Long id, Long lineId, Long schemeId, String pan) {
-        MfImportBatch batch = loadBatch(id, pan);
-        if (!MfConstants.BATCH_UPLOADED.equals(batch.getStatus())) {
-            throw new RuntimeException("This batch has already been processed");
-        }
-        MfImportLine line = lineRepository.findById(lineId)
-                .orElseThrow(() -> new RuntimeException("Import line not found"));
-        if (!batch.getId().equals(line.getBatchId())) {
-            throw new RuntimeException("Import line does not belong to this batch");
-        }
-        MfScheme scheme = schemeRepository.findById(schemeId)
-                .orElseThrow(() -> new RuntimeException("Scheme not found"));
-        line.setTargetSchemeId(schemeId);
-        line.setStatus(MfConstants.LINE_MAPPED);
-        line.setMessage("Remapped to " + scheme.getSchemeName() + " (" + scheme.getAmcName() + ")");
-        lineRepository.save(line);
-        return validate(id, pan);
+    public List<MfImportBatch> listBatches(String ownerPan) {
+        return batchRepository.findByPanOrderByUploadedAtDesc(ownerPan);
+    }
+
+    @Override
+    public String parsedJson(Long batchId, String ownerPan) {
+        return load(batchId, ownerPan).getParsedJson();
     }
 
     // ----------------------------------------------------------------- accept
 
+    /**
+     * MF.md 13 / MF_V3 3 - the reviewed statement is merged into the accepted
+     * data instead of replacing it: a folio, a scheme or a ledger row that is
+     * already on file keeps its row and only what the statement adds is
+     * written, so an upload can never drop an older transaction. The printed
+     * summary and the balances of a scheme follow the statement only while
+     * that statement is the newest one accepted (MF_V3 6) - an older statement
+     * can never move a total.
+     */
     @Override
-    @Transactional
-    public Map<String, Object> accept(Long id, String pan) {
-        MfImportBatch batch = loadBatch(id, pan);
-        if (!MfConstants.BATCH_UPLOADED.equals(batch.getStatus())) {
-            throw new RuntimeException("This batch has already been processed");
-        }
-        List<MfImportLine> lines = lineRepository.findByBatchIdOrderByLineNoAsc(id);
+    public Map<String, Object> accept(Long batchId, String ownerPan) {
+        MfImportBatch batch = load(batchId, ownerPan);
+        return transactions.execute(status -> {
+            List<MfTmpFolio> tmpFolios = tmpFolioRepository.findByOwnerPanOrderByFolioNo(ownerPan);
+            if (tmpFolios.isEmpty()) {
+                throw new RuntimeException("There is no parsed statement to accept - upload a report first");
+            }
+            boolean newest = isNewerThanAccepted(batch, ownerPan);
+            Merge merged = merge(ownerPan, tmpFolios, newest);
 
-        Set<Long> newSchemes = new HashSet<>();
-        Set<Long> headersWithHolding = new HashSet<>();
-        Map<Long, double[]> txnAgg = new HashMap<>(); // headerId -> [units, amount]
-        int createdTxns = 0, skipped = 0, createdHeaders = 0, updatedHeaders = 0, acceptedLines = 0;
+            batch.setStatus("ACCEPTED");
+            batch.setAcceptedAt(LocalDateTime.now());
+            batch.setValidStatus("GREEN");
+            batchRepository.save(batch);
+            return Map.of("batch", batch,
+                    "folios", merged.folios(),
+                    "schemes", merged.schemes(),
+                    "transactions", merged.transactions(),
+                    "summaryUpdated", newest);
+        });
+    }
 
-        // A batch that carries a holdings section (CAS statement) is a position
-        // snapshot: the holdings rows define what is held today and the transaction
-        // rows are history for the transaction table. A scheme with transactions but
-        // no holding row is an exited position - netting its (partial) history into
-        // the header would show phantom negative units/value. Only a pure transaction
-        // export (no holdings section) aggregates into headers.
-        boolean snapshotBatch = lines.stream()
-                .anyMatch(l -> MfConstants.LINE_HOLDING.equals(l.getLineType()));
-
-        // 1) transactions first - their aggregate effect is applied later, only
-        //    for headers the statement's holding rows do not snapshot
-        for (MfImportLine l : lines) {
-            if (!MfConstants.LINE_TRANSACTION.equals(l.getLineType())) continue;
-            if (MfConstants.LINE_ERROR.equals(l.getStatus())
-                    || MfConstants.LINE_SKIPPED.equals(l.getStatus())
-                    || MfConstants.LINE_EXISTS.equals(l.getStatus())) continue;
-            if (l.getTxnDate() == null) {
-                l.setStatus(MfConstants.LINE_ERROR);
-                l.setMessage("Missing date - skipped");
-                continue;
-            }
-            MfScheme scheme = resolveScheme(l, newSchemes, pan);
-            MfHeader header = locateHeader(pan, scheme, l.getFolioNo(), l.getMatchedHeaderId());
-            if (header == null) {
-                header = createHeader(pan, scheme, l.getFolioNo());
-                createdHeaders++;
-            }
-            if (transactionRepository.countByDedupeKey(l.getDedupeKey()) > 0
-                    || looseExists(header, l) || crossFolioExists(pan, scheme, l)) {
-                l.setStatus(MfConstants.LINE_EXISTS);
-                l.setMatchedHeaderId(header.getId());
-                l.setMessage("Already recorded - duplicate skipped");
-                skipped++;
-                continue;
-            }
-            MfTransaction t = new MfTransaction();
-            t.setHeaderId(header.getId());
-            t.setPan(pan);
-            t.setTxnDate(l.getTxnDate());
-            t.setTxnType(l.getTxnType() == null || l.getTxnType().isBlank()
-                    ? inferTxnType(l.getDescription(), l.getUnits(), l.getAmount()) : l.getTxnType());
-            t.setDescription(l.getDescription());
-            t.setUnits(l.getUnits());
-            t.setNav(l.getNav());
-            t.setAmount(l.getAmount());
-            t.setSource(MfConstants.SRC_IMPORT);
-            t.setDedupeKey(l.getDedupeKey());
-            transactionRepository.save(t);
-
-            double[] a = txnAgg.computeIfAbsent(header.getId(), k -> new double[2]);
-            a[0] += l.getUnits();
-            a[1] += l.getAmount();
-            l.setMatchedHeaderId(header.getId());
-            l.setMessage("Imported on accept");
-            createdTxns++;
-            acceptedLines++;
-        }
-
-        // 2) holdings - latest statement snapshot wins, never a duplicate header (MF.md 22)
-        // A PDF statement prints units and market value but no cost basis, so its
-        // invested value is an estimate from the in-window cash flows: it must never
-        // overwrite an invested figure the system already holds (xlsx/csv carry the
-        // report's exact "Investment" column).
-        boolean pdfSourced = MfConstants.FILE_PDF.equals(batch.getFileType());
-        for (MfImportLine l : lines) {
-            if (!MfConstants.LINE_HOLDING.equals(l.getLineType())) continue;
-            if (MfConstants.LINE_ERROR.equals(l.getStatus())
-                    || MfConstants.LINE_SKIPPED.equals(l.getStatus())) continue;
-            MfScheme scheme = resolveScheme(l, newSchemes, pan);
-            MfHeader header = locateHeader(pan, scheme, l.getFolioNo(), l.getMatchedHeaderId());
-            if (header == null) {
-                header = createHeader(pan, scheme, l.getFolioNo());
-                createdHeaders++;
-            } else {
-                updatedHeaders++;
-            }
-            header.setUnits(l.getUnits());
-            if (!pdfSourced || header.getInvestedValue() <= 0) {
-                header.setInvestedValue(l.getInvestedValue());
-            }
-            header.setCurrentValue(l.getCurrentValue());
-            if (l.getUnits() > 0) {
-                header.setNav(MfUtil.round(l.getCurrentValue() / l.getUnits(), 4));
-                if (MfConstants.STATUS_CLOSED.equals(header.getStatus())) {
-                    header.setStatus(MfConstants.STATUS_ACTIVE);
-                }
-            }
-            header.setUpdatedAt(LocalDateTime.now());
-            headerRepository.save(header);
-            headersWithHolding.add(header.getId());
-            l.setMatchedHeaderId(header.getId());
-            l.setMessage("Applied on accept");
-            acceptedLines++;
-        }
-
-        // 3) transaction-only headers
-        if (snapshotBatch) {
-            // CAS-style batch: a scheme without a holding row is exited - keep the
-            // transactions for the history report but hold the position flat at zero
-            // instead of inheriting a negative net from partial transaction history.
-            for (Long hid : txnAgg.keySet()) {
-                if (headersWithHolding.contains(hid)) continue;
-                MfHeader h = headerRepository.findById(hid).orElse(null);
-                if (h == null) continue;
-                h.setUnits(0);
-                h.setInvestedValue(0);
-                h.setCurrentValue(0);
-                h.setStatus(MfConstants.STATUS_CLOSED);
-                h.setUpdatedAt(LocalDateTime.now());
-                headerRepository.save(h);
-            }
-        } else {
-            // Pure transaction export (no holdings section): the transaction
-            // aggregate is the only source of the position, so apply it additively.
-            for (Map.Entry<Long, double[]> e : txnAgg.entrySet()) {
-                if (headersWithHolding.contains(e.getKey())) continue;
-                MfHeader h = headerRepository.findById(e.getKey()).orElse(null);
-                if (h == null) continue;
-                h.setUnits(MfUtil.roundUnits(h.getUnits() + e.getValue()[0]));
-                h.setInvestedValue(MfUtil.round(h.getInvestedValue() + e.getValue()[1], 2));
-                if (h.getNav() > 0) {
-                    h.setCurrentValue(MfUtil.round(h.getUnits() * h.getNav(), 2));
-                } else {
-                    h.setCurrentValue(MfUtil.round(h.getCurrentValue() + e.getValue()[1], 2));
-                }
-                h.setUpdatedAt(LocalDateTime.now());
-                headerRepository.save(h);
-            }
-        }
-
-        batch.setStatus(MfConstants.BATCH_ACCEPTED);
-        batch.setAcceptedAt(LocalDateTime.now());
+    @Override
+    public void discard(Long batchId, String ownerPan) {
+        MfImportBatch batch = load(batchId, ownerPan);
+        transactions.executeWithoutResult(status -> purgeTemporary(ownerPan));
+        batch.setStatus("DISCARDED");
+        batch.setValidStatus("PENDING");
         batchRepository.save(batch);
-        lineRepository.saveAll(lines);
-
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("acceptedLines", acceptedLines);
-        out.put("createdTransactions", createdTxns);
-        out.put("skippedDuplicates", skipped);
-        out.put("createdHeaders", createdHeaders);
-        out.put("updatedHeaders", updatedHeaders);
-        out.put("registeredSchemes", newSchemes.size());
-        return out;
     }
 
-    // --------------------------------------------------------------- internals
+    // ---------------------------------------------------------------- staging
 
-    /** Classifies one line: NEW / EXISTS / NEW_SCHEME / ERROR (MF.md 15/20/22). */
-    private void classify(String pan, MfImportLine l, Set<String> seenInReport) {
-        if (l.getSchemeName() == null || l.getSchemeName().isBlank()) {
-            l.setStatus(MfConstants.LINE_ERROR);
-            l.setMessage("Row has no scheme name");
-            return;
-        }
-        if (MfConstants.LINE_HOLDING.equals(l.getLineType())) {
-            if (l.getUnits() <= 0 && l.getInvestedValue() <= 0 && l.getCurrentValue() <= 0) {
-                // A row the report itself prints with no units and no values is not an
-                // unreadable row - it simply carries nothing to import, so it must not
-                // fail the reconciliation colour when the totals match (MF.md 15).
-                l.setStatus(MfConstants.LINE_SKIPPED);
-                l.setMessage("Empty row in the report (no units or values) - nothing to import");
-                return;
-            }
-        } else if (l.getTxnDate() == null) {
-            l.setStatus(MfConstants.LINE_ERROR);
-            l.setMessage("Row has no readable date");
-            return;
-        }
-        if (MfConstants.LINE_TRANSACTION.equals(l.getLineType())
-                && l.getUnits() == 0 && l.getAmount() == 0) {
-            // CAS statements list service notes (nominee registration, address update,
-            // SIP registered ...) in the transaction log - they carry nothing to book
-            l.setStatus(MfConstants.LINE_SKIPPED);
-            l.setMessage("Activity row with no units or amount - nothing to import");
-            return;
-        }
-
-        if (!seenInReport.add(l.getDedupeKey())) {
-            l.setStatus(MfConstants.LINE_EXISTS);
-            l.setMatchedHeaderId(null);
-            l.setMessage("Duplicate row inside this report - skipped");
-            return;
-        }
-
-        MfScheme scheme = findScheme(l.getSchemeName(), l.getAmcName());
-        if (scheme == null) {
-            l.setStatus(MfConstants.LINE_NEW_SCHEME);
-            l.setMatchedHeaderId(null);
-            l.setMessage("Scheme is not registered - remap it, or it will be registered on accept (MF.md 20)");
-            return;
-        }
-        MfHeader header = locateHeader(pan, scheme, l.getFolioNo(), null);
-        l.setMatchedHeaderId(header == null ? null : header.getId());
-
-        if (MfConstants.LINE_HOLDING.equals(l.getLineType())) {
-            if (header != null) {
-                l.setStatus(MfConstants.LINE_EXISTS);
-                l.setMessage("Existing holding - values will be refreshed, no duplicate header is created");
-            } else {
-                l.setStatus(MfConstants.LINE_NEW);
-                l.setMessage("New holding - ready to accept");
-            }
-            return;
-        }
-
-        // transaction: already in backend? (MF.md 22)
-        if (transactionRepository.countByDedupeKey(l.getDedupeKey()) > 0) {
-            l.setStatus(MfConstants.LINE_EXISTS);
-            l.setMessage("This transaction already exists in the system - duplicate skipped");
-            return;
-        }
-        if (header != null && looseExists(header, l)) {
-            l.setStatus(MfConstants.LINE_EXISTS);
-            l.setMessage("Same transaction already recorded on this holding - duplicate skipped");
-            return;
-        }
-        // Cross-folio fallback (MF.md 22): xlsx/csv transaction sheets carry no folio
-        // column while the PDF prints folio sections, so the same transaction can be
-        // attributed to different folios of one scheme depending on the upload format.
-        if (crossFolioExists(pan, scheme, l)) {
-            l.setStatus(MfConstants.LINE_EXISTS);
-            l.setMessage("Same transaction already recorded on another folio of this scheme - duplicate skipped");
-            return;
-        }
-        l.setStatus(MfConstants.LINE_NEW);
-        l.setMessage(header == null ? "New transaction - a holding will be created" : "New transaction - ready to accept");
+    /** Result of writing one report into the temporary tables. */
+    private record Staging(int folios, int schemes, int txns, int adjusted, boolean firstImport) {
     }
 
     /**
-     * Same transaction on another folio of the same scheme (MF.md 22): matches on
-     * date + type + units + amount with the same tolerance as {@link #looseExists},
-     * ignoring the folio because that is exactly what the two upload formats
-     * disagree about. Holdings totals are unaffected either way (the holding rows
-     * snapshot each header), but the transaction table must never book it twice.
+     * Replaces the temporary set with the freshly parsed report. Called inside
+     * the upload transaction, after the pdf has been read (MF.md 9).
      */
-    private boolean crossFolioExists(String pan, MfScheme scheme, MfImportLine l) {
-        if (l.getTxnDate() == null || scheme == null) return false;
-        String type = l.getTxnType() == null || l.getTxnType().isBlank()
-                ? inferTxnType(l.getDescription(), l.getUnits(), l.getAmount()) : l.getTxnType();
-        for (MfHeader h : headerRepository.findByPanAndSchemeId(pan, scheme.getId())) {
-            for (MfTransaction t : transactionRepository.findByHeaderIdOrderByTxnDateAscIdAsc(h.getId())) {
-                if (l.getTxnDate().equals(t.getTxnDate())
-                        && type.equals(t.getTxnType())
-                        && Math.abs(t.getUnits() - l.getUnits()) < 0.01
-                        && Math.abs(t.getAmount() - l.getAmount()) < 0.5) {
-                    return true;
-                }
+    private Staging stage(String ownerPan, KfCasReport report) {
+        purgeTemporary(ownerPan);
+
+        List<MfTmpPortfolioSummary> summaries = new ArrayList<>();
+        for (KfCasReport.SummaryRow row : report.summary) {
+            MfTmpPortfolioSummary summary = new MfTmpPortfolioSummary();
+            summary.setOwnerPan(ownerPan);
+            summary.setAmc(row.amc);
+            summary.setCostValue(dec(row.cost));
+            summary.setMarketValue(dec(row.market));
+            summary.setTotal(row.total);
+            summaries.add(summary);
+        }
+        tmpSummaryRepository.saveAll(summaries);
+
+        List<MfTmpFolio> folios = new ArrayList<>();
+        for (KfCasReport.Folio folio : report.folios) {
+            MfTmpFolio entity = new MfTmpFolio();
+            entity.setOwnerPan(ownerPan);
+            entity.setFolioNo(folio.folio);
+            entity.setAmc(folio.amc);
+            entity.setInvestorName(folio.name);
+            entity.setFolioPan(folio.pan);
+            entity.setKyc(folio.kyc);
+            entity.setPanKyc(folio.panKyc);
+            folios.add(entity);
+        }
+        tmpFolioRepository.saveAll(folios);
+
+        List<KfCasReport.Scheme> parsedSchemes = new ArrayList<>();
+        List<MfTmpScheme> schemes = new ArrayList<>();
+        for (int i = 0; i < report.folios.size(); i++) {
+            for (KfCasReport.Scheme scheme : report.folios.get(i).schemes) {
+                MfTmpScheme entity = new MfTmpScheme();
+                entity.setOwnerPan(ownerPan);
+                entity.setFolioId(folios.get(i).getId());
+                entity.setScheme(scheme.scheme);
+                entity.setAdvisor(scheme.advisor);
+                entity.setRtaCode(scheme.rtaCode);
+                entity.setRta(scheme.rta);
+                entity.setFundType(scheme.type);
+                entity.setIsin(scheme.isin);
+                entity.setAmfi(scheme.amfi);
+                entity.setOpenUnits(dec(scheme.open));
+                entity.setCloseUnits(dec(scheme.close));
+                entity.setCloseCalculated(dec(scheme.closeCalculated));
+                schemes.add(entity);
+                parsedSchemes.add(scheme);
             }
         }
-        return false;
+        tmpSchemeRepository.saveAll(schemes);
+
+        List<MfTmpNominee> nominees = new ArrayList<>();
+        List<MfTmpValuation> valuations = new ArrayList<>();
+        List<MfTmpTransaction> txns = new ArrayList<>();
+        for (int i = 0; i < parsedSchemes.size(); i++) {
+            KfCasReport.Scheme scheme = parsedSchemes.get(i);
+            Long schemeId = schemes.get(i).getId();
+            for (String name : scheme.nominees) {
+                MfTmpNominee nominee = new MfTmpNominee();
+                nominee.setOwnerPan(ownerPan);
+                nominee.setSchemeId(schemeId);
+                nominee.setNomineeName(name);
+                nominees.add(nominee);
+            }
+            MfTmpValuation valuation = new MfTmpValuation();
+            valuation.setOwnerPan(ownerPan);
+            valuation.setSchemeId(schemeId);
+            valuation.setValueDate(isoDate(scheme.valuation.date));
+            valuation.setNav(dec(scheme.valuation.nav));
+            valuation.setCostValue(dec(scheme.valuation.cost));
+            valuation.setMarketValue(dec(scheme.valuation.value));
+            valuations.add(valuation);
+            for (KfCasReport.Txn txn : scheme.transactions) {
+                MfTmpTransaction entity = new MfTmpTransaction();
+                entity.setOwnerPan(ownerPan);
+                entity.setSchemeId(schemeId);
+                entity.setTxnDate(isoDate(txn.date));
+                entity.setDescription(txn.description);
+                entity.setAmount(dec(txn.amount));
+                entity.setUnits(dec(txn.units));
+                entity.setNav(dec(txn.nav));
+                entity.setBalance(dec(txn.balance));
+                entity.setType(txn.type);
+                entity.setDividendRate(dec(txn.dividendRate));
+                entity.setGiftFolio(txn.giftFolio);
+                txns.add(entity);
+            }
+        }
+        tmpNomineeRepository.saveAll(nominees);
+        tmpValuationRepository.saveAll(valuations);
+        tmpTransactionRepository.saveAll(txns);
+
+        boolean firstImport = permanentIsEmpty(ownerPan);
+        int adjusted = firstImport ? addAdjustedRows(ownerPan, schemes, valuations, txns) : 0;
+        return new Staging(folios.size(), schemes.size(), txns.size() + adjusted, adjusted, firstImport);
     }
 
     /**
-     * Loose duplicate check (MF.md 22): SIP instalments auto-executed locally
-     * may differ a hair in units from the statement's rounding, so compare
-     * date + type + near-equal units and amount on the same holding.
+     * MF.md 10: the ledger only covers the last years the statement prints,
+     * while the summary always holds the current worth of the investment. The
+     * difference is booked once per scheme as an ADJUSTED row, dated on the
+     * statement's own valuation date, so the ledger adds up to the summary at
+     * scheme level - and, by summation, at AMC level too.
      */
-    private boolean looseExists(MfHeader header, MfImportLine l) {
-        if (l.getTxnDate() == null) return false;
-        String type = l.getTxnType() == null || l.getTxnType().isBlank()
-                ? inferTxnType(l.getDescription(), l.getUnits(), l.getAmount()) : l.getTxnType();
-        for (MfTransaction t : transactionRepository.findByHeaderIdOrderByTxnDateAscIdAsc(header.getId())) {
-            if (l.getTxnDate().equals(t.getTxnDate())
-                    && type.equals(t.getTxnType())
-                    && Math.abs(t.getUnits() - l.getUnits()) < 0.01
-                    && Math.abs(t.getAmount() - l.getAmount()) < 0.5) {
-                return true;
-            }
+    private int addAdjustedRows(String ownerPan, List<MfTmpScheme> schemes,
+                                List<MfTmpValuation> valuations, List<MfTmpTransaction> txns) {
+        Map<Long, MfTmpValuation> valuationByScheme = new HashMap<>();
+        for (MfTmpValuation valuation : valuations) {
+            valuationByScheme.put(valuation.getSchemeId(), valuation);
         }
-        return false;
-    }
-
-    private MfScheme findScheme(String name, String amc) {
-        String n = name == null ? "" : name.trim();
-        String a = amc == null ? "" : amc.trim();
-        List<MfScheme> exact = schemeRepository.findBySchemeNameIgnoreCaseAndAmcNameIgnoreCase(n, a);
-        MfScheme s = exact.isEmpty() ? null : exact.get(0);
-        if (s != null) return s;
-        List<MfScheme> byName = schemeRepository.findBySchemeNameIgnoreCase(n);
-        if (byName.size() == 1) return byName.get(0);
-        if (!a.isEmpty()) {
-            for (MfScheme c : byName) {
-                String ca = c.getAmcName() == null ? "" : c.getAmcName().toLowerCase(Locale.ROOT);
-                if (ca.contains(a.toLowerCase(Locale.ROOT))
-                        || a.toLowerCase(Locale.ROOT).contains(ca)) {
-                    return c;
-                }
-            }
-        }
-        // multiple matches with no usable AMC need an explicit remap (MF.md 20)
-        return null;
-    }
-
-    /** Resolve for accept: exact -> single-name -> remap -> register (MF.md 20). */
-    private MfScheme resolveScheme(MfImportLine l, Set<Long> created, String pan) {
-        if (l.getTargetSchemeId() != null) {
-            return schemeRepository.findById(l.getTargetSchemeId())
-                    .orElseThrow(() -> new RuntimeException("Remapped scheme no longer exists"));
-        }
-        MfScheme s = findScheme(l.getSchemeName(), l.getAmcName());
-        if (s != null) return s;
-        if (l.getSchemeName() == null || l.getSchemeName().isBlank()) {
-            throw new RuntimeException("A row has no scheme name and cannot be accepted");
-        }
-        List<MfScheme> ambiguous = schemeRepository.findBySchemeNameIgnoreCase(l.getSchemeName());
-        if (!ambiguous.isEmpty()) {
-            throw new RuntimeException("'" + l.getSchemeName() + "' matches several AMCs - "
-                    + "remap the row to the correct scheme before accepting");
-        }
-        MfScheme fresh = new MfScheme();
-        fresh.setSchemeName(l.getSchemeName().trim());
-        fresh.setAmcName(l.getAmcName() == null ? "" : l.getAmcName().trim());
-        fresh.setCategory(l.getCategory() == null ? "" : l.getCategory().trim());
-        fresh = schemeRepository.save(fresh);
-        created.add(fresh.getId());
-        return fresh;
-    }
-
-    private MfHeader locateHeader(String pan, MfScheme scheme, String folio, Long hintId) {
-        if (hintId != null) {
-            MfHeader hinted = headerRepository.findById(hintId).orElse(null);
-            if (hinted != null && pan.equalsIgnoreCase(hinted.getPan())) return hinted;
-        }
-        if (folio != null && !folio.isBlank()) {
-            List<MfHeader> found = headerRepository
-                    .findByPanAndSchemeIdAndFolioNoIgnoreCase(pan, scheme.getId(), folio);
-            return found.isEmpty() ? null : found.get(0);
-        }
-        List<MfHeader> all = headerRepository.findByPanAndSchemeId(pan, scheme.getId());
-        return all.isEmpty() ? null : all.get(0);
-    }
-
-    private MfHeader createHeader(String pan, MfScheme scheme, String folio) {
-        MfHeader h = new MfHeader();
-        h.setPan(pan);
-        // CONSISTENCY.md 6: accepted import rows mandatorily reference the client
-        List<Client> owners = clientRepository.findByPan(pan);
-        if (owners.isEmpty()) {
-            throw new RuntimeException("Unknown client " + pan);
-        }
-        h.setClient(owners.get(0));
-        h.setScheme(scheme);
-        h.setFolioNo(folio == null ? "" : folio);
-        h.setRegistrationType(MfConstants.REG_ONE_TIME);
-        h.setStatus(MfConstants.STATUS_ACTIVE);
-        h.setUpdatedAt(LocalDateTime.now());
-        return headerRepository.save(h);
-    }
-
-    private MfImportBatch loadBatch(Long id, String pan) {
-        return batchRepository.findByIdAndPan(id, pan).stream().findFirst()
-                .orElseThrow(() -> new RuntimeException("Import batch not found with id " + id));
-    }
-
-    // ------------------------------------------------------------- reporting
-
-    private Map<String, Object> buildResponse(MfImportBatch batch, List<MfImportLine> lines, String pan) {
-        List<Map<String, Object>> checks = new ArrayList<>();
-        try {
-            if (batch.getValidationDetails() != null && !batch.getValidationDetails().isBlank()) {
-                checks = mapper.readValue(batch.getValidationDetails(), List.class);
-            }
-        } catch (Exception ignored) {
-        }
-
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("batch", batch);
-        out.put("lines", lines);
-        out.put("checks", checks);
-        out.put("detail", buildDetail(batch, lines, pan));
-        return out;
-    }
-
-    /**
-     * Detail report for the reconciliation page (MF.md 23 / 25): totals before,
-     * what the statement says, and totals projected after the user accepts.
-     */
-    private Map<String, Object> buildDetail(MfImportBatch batch, List<MfImportLine> lines, String pan) {
-        List<MfHeader> all = headerRepository.search(pan, null, null, null, null, null, null);
-        double sysInv = 0, sysCur = 0, sysUnits = 0;
-        for (MfHeader h : all) {
-            sysInv += h.getInvestedValue();
-            sysCur += h.getCurrentValue();
-            sysUnits += h.getUnits();
-        }
-
-        double repInv = 0, repCur = 0, repUnits = 0;
-        int repHoldings = 0, repTxns = 0;
-        for (MfImportLine l : lines) {
-            if (MfConstants.LINE_HOLDING.equals(l.getLineType())) {
-                repHoldings++;
-                if (MfConstants.LINE_ERROR.equals(l.getStatus())
-                        || MfConstants.LINE_SKIPPED.equals(l.getStatus())) continue;
-                repInv += l.getInvestedValue();
-                repCur += l.getCurrentValue();
-                repUnits += l.getUnits();
-            } else {
-                repTxns++;
-            }
-        }
-
-        // projected after accept: holdings snapshot replaces matched headers,
-        // brand-new holdings add, and transactions add only where no holding
-        // row covers the same scheme+folio
-        Set<String> coveredKeys = new HashSet<>();
-        Map<String, MfHeader> headerByKey = new HashMap<>();
-        for (MfImportLine l : lines) {
-            if (!MfConstants.LINE_HOLDING.equals(l.getLineType())) continue;
-            if (MfConstants.LINE_ERROR.equals(l.getStatus())
-                    || MfConstants.LINE_SKIPPED.equals(l.getStatus())) continue;
-            coveredKeys.add(key(l.getSchemeName(), l.getFolioNo()));
-            if (l.getMatchedHeaderId() != null) {
-                headerRepository.findById(l.getMatchedHeaderId())
-                        .ifPresent(h -> headerByKey.put(key(l.getSchemeName(), l.getFolioNo()), h));
-            }
-        }
-
-        double projInv = sysInv, projCur = sysCur, projUnits = sysUnits;
-        int newHeaders = 0, refreshHeaders = 0, newTxns = 0, dupSkipped = 0, schemesToRegister = 0;
-        // mirrors accept(): only a pure transaction export adds transaction
-        // aggregates to the projected position - see accept() step 3
-        boolean snapshotBatch = lines.stream()
-                .anyMatch(l -> MfConstants.LINE_HOLDING.equals(l.getLineType()));
-        // once the batch is accepted the transaction rows are already written -
-        // projecting them again would double the "After accept" transaction count
-        boolean acceptedBatch = MfConstants.BATCH_ACCEPTED.equals(batch.getStatus());
-        boolean pdfSourced = MfConstants.FILE_PDF.equals(batch.getFileType());
-        for (MfImportLine l : lines) {
-            if (MfConstants.LINE_ERROR.equals(l.getStatus())
-                    || MfConstants.LINE_SKIPPED.equals(l.getStatus())) continue;
-            // Only transaction duplicates are skipped rows: an EXISTING holding is
-            // a refresh (its values are replaced), so it must still project forward
-            if (MfConstants.LINE_EXISTS.equals(l.getStatus())
-                    && MfConstants.LINE_TRANSACTION.equals(l.getLineType())) {
-                dupSkipped++;
+        Map<Long, BigDecimal> amountByScheme = new TreeMap<>();
+        Map<Long, BigDecimal> unitsByScheme = new TreeMap<>();
+        for (MfTmpTransaction txn : txns) {
+            if (TxnClassifier.TYPE_ADJUSTED.equals(txn.getType())) {
                 continue;
             }
-            if (l.getTargetSchemeId() == null
-                    && MfConstants.LINE_NEW_SCHEME.equals(l.getStatus())) {
-                schemesToRegister++;
+            amountByScheme.merge(txn.getSchemeId(), nvl(txn.getAmount()), BigDecimal::add);
+            unitsByScheme.merge(txn.getSchemeId(), nvl(txn.getUnits()), BigDecimal::add);
+        }
+        List<MfTmpTransaction> adjusted = new ArrayList<>();
+        for (MfTmpScheme scheme : schemes) {
+            MfTmpValuation valuation = valuationByScheme.get(scheme.getId());
+            if (valuation == null || valuation.getCostValue() == null) {
+                continue; // nothing to reconcile the ledger against
             }
-            if (MfConstants.LINE_HOLDING.equals(l.getLineType())) {
-                MfHeader match = headerByKey.get(key(l.getSchemeName(), l.getFolioNo()));
-                if (match != null) {
-                    // mirrors accept(): a PDF refresh keeps the invested figure the
-                    // system already holds (PDF statements carry no cost basis)
-                    if (!pdfSourced || match.getInvestedValue() <= 0) {
-                        projInv += l.getInvestedValue() - match.getInvestedValue();
-                    }
-                    projCur += l.getCurrentValue() - match.getCurrentValue();
-                    projUnits += l.getUnits() - match.getUnits();
-                    refreshHeaders++;
-                } else {
-                    projInv += l.getInvestedValue();
-                    projCur += l.getCurrentValue();
-                    projUnits += l.getUnits();
-                    newHeaders++;
-                }
+            BigDecimal amount = valuation.getCostValue()
+                    .subtract(amountByScheme.getOrDefault(scheme.getId(), ZERO));
+            BigDecimal units = nvl(scheme.getCloseUnits())
+                    .subtract(nvl(scheme.getOpenUnits()).add(unitsByScheme.getOrDefault(scheme.getId(), ZERO)));
+            if (amount.signum() == 0 && units.signum() == 0) {
+                continue; // the ledger already reaches the summary
+            }
+            MfTmpTransaction txn = new MfTmpTransaction();
+            txn.setOwnerPan(ownerPan);
+            txn.setSchemeId(scheme.getId());
+            txn.setTxnDate(valuation.getValueDate());
+            txn.setDescription(ADJUSTED_DESCRIPTION);
+            txn.setAmount(amount);
+            txn.setUnits(units);
+            txn.setNav(valuation.getNav());
+            txn.setBalance(scheme.getCloseUnits());
+            txn.setType(TxnClassifier.TYPE_ADJUSTED);
+            adjusted.add(txn);
+        }
+        tmpTransactionRepository.saveAll(adjusted);
+        return adjusted.size();
+    }
+
+    private boolean permanentIsEmpty(String ownerPan) {
+        return folioRepository.findByOwnerPanOrderByFolioNo(ownerPan).isEmpty();
+    }
+
+    /** Empties the temporary set - only ever called after a successful read. */
+    private void purgeTemporary(String ownerPan) {
+        tmpTransactionRepository.deleteByOwner(ownerPan);
+        tmpValuationRepository.deleteByOwner(ownerPan);
+        tmpNomineeRepository.deleteByOwner(ownerPan);
+        tmpSchemeRepository.deleteByOwner(ownerPan);
+        tmpFolioRepository.deleteByOwner(ownerPan);
+        tmpSummaryRepository.deleteByOwner(ownerPan);
+    }
+
+    /** What one accept added to the accepted data. */
+    private record Merge(int folios, int schemes, int transactions) {
+    }
+
+    /**
+     * MF_V3 3/6 - writes the staged statement into the permanent table set.
+     * Folios and schemes are matched on their printed numbers, the ledger on
+     * the identity of every row (MF.md 12a), so a row that is already on file
+     * keeps its record and only what the statement adds is inserted. The
+     * balances, the valuations and the summary are copied over only when
+     * {@code newest} says the statement ends later than anything accepted so
+     * far - an older statement must never move a total (MF_V3 6).
+     */
+    private Merge merge(String ownerPan, List<MfTmpFolio> tmpFolios, boolean newest) {
+        // ----------------------------------------------------------- folios
+        Map<String, MfFolio> folioByNo = new LinkedHashMap<>();
+        Map<Long, String> folioNoById = new HashMap<>();
+        for (MfFolio folio : folioRepository.findByOwnerPanOrderByFolioNo(ownerPan)) {
+            folioByNo.put(key(folio.getFolioNo()), folio);
+            folioNoById.put(folio.getId(), folio.getFolioNo());
+        }
+        Map<Long, Long> folioIdMap = new HashMap<>();       // staged id -> accepted id
+        List<MfFolio> addedFolios = new ArrayList<>();
+        List<MfTmpFolio> addedFolioSource = new ArrayList<>();
+        for (MfTmpFolio row : tmpFolios) {
+            MfFolio accepted = folioByNo.get(key(row.getFolioNo()));
+            if (accepted == null) {
+                MfFolio copy = new MfFolio();
+                copy.setOwnerPan(row.getOwnerPan());
+                copy.setFolioNo(row.getFolioNo());
+                copy.setAmc(row.getAmc());
+                copy.setInvestorName(row.getInvestorName());
+                copy.setFolioPan(row.getFolioPan());
+                copy.setKyc(row.getKyc());
+                copy.setPanKyc(row.getPanKyc());
+                addedFolios.add(copy);
+                addedFolioSource.add(row);
             } else {
-                if (acceptedBatch) continue;
-                newTxns++;
-                if (!snapshotBatch && !coveredKeys.contains(key(l.getSchemeName(), l.getFolioNo()))) {
-                    projInv += l.getAmount();
-                    projUnits += l.getUnits();
+                if (newest) {
+                    accepted.setAmc(row.getAmc());
+                    accepted.setInvestorName(row.getInvestorName());
+                    accepted.setFolioPan(row.getFolioPan());
+                    accepted.setKyc(row.getKyc());
+                    accepted.setPanKyc(row.getPanKyc());
                 }
+                folioIdMap.put(row.getId(), accepted.getId());
             }
         }
-
-        Map<String, Object> system = new LinkedHashMap<>();
-        system.put("headers", all.size());
-        system.put("transactions", transactionRepository.countByPan(pan));
-        system.put("invested", MfUtil.round(sysInv, 2));
-        system.put("current", MfUtil.round(sysCur, 2));
-        system.put("profit", MfUtil.round(sysCur - sysInv, 2));
-        system.put("units", MfUtil.roundUnits(sysUnits));
-
-        Map<String, Object> report = new LinkedHashMap<>();
-        report.put("fileName", batch.getFileName());
-        report.put("fileType", batch.getFileType());
-        report.put("clientName", batch.getClientName());
-        report.put("reportPan", batch.getReportPan());
-        report.put("from", batch.getReportFrom());
-        report.put("to", batch.getReportTo());
-        report.put("invested", MfUtil.round(batch.getRptInvested(), 2));
-        report.put("current", MfUtil.round(batch.getRptCurrent(), 2));
-        report.put("profit", MfUtil.round(batch.getRptProfit(), 2));
-        report.put("holdings", repHoldings);
-        report.put("transactions", repTxns);
-        report.put("parsedInvested", MfUtil.round(repInv, 2));
-        report.put("parsedCurrent", MfUtil.round(repCur, 2));
-        report.put("parsedUnits", MfUtil.roundUnits(repUnits));
-
-        Map<String, Object> projected = new LinkedHashMap<>();
-        projected.put("headers", all.size() + newHeaders);
-        projected.put("refreshedHeaders", refreshHeaders);
-        projected.put("transactions", transactionRepository.countByPan(pan) + newTxns);
-        projected.put("invested", MfUtil.round(projInv, 2));
-        projected.put("current", MfUtil.round(projCur, 2));
-        projected.put("profit", MfUtil.round(projCur - projInv, 2));
-        projected.put("units", MfUtil.roundUnits(projUnits));
-        projected.put("duplicateRowsSkipped", dupSkipped);
-        projected.put("schemesToRegister", schemesToRegister);
-
-        Map<String, Object> counts = new LinkedHashMap<>();
-        for (MfImportLine l : lines) {
-            String st = l.getStatus() == null ? "?" : l.getStatus();
-            counts.merge(st, 1, (a, b) -> ((Integer) a) + ((Integer) b));
+        folioRepository.saveAll(addedFolios);
+        for (int i = 0; i < addedFolios.size(); i++) {
+            MfTmpFolio source = addedFolioSource.get(i);
+            folioIdMap.put(source.getId(), addedFolios.get(i).getId());
+            folioByNo.put(key(source.getFolioNo()), addedFolios.get(i));
+            folioNoById.put(addedFolios.get(i).getId(), addedFolios.get(i).getFolioNo());
         }
 
-        Map<String, Object> detail = new LinkedHashMap<>();
-        detail.put("system", system);
-        detail.put("report", report);
-        detail.put("projected", projected);
-        detail.put("counts", counts);
-        return detail;
+        // ---------------------------------------------------------- schemes
+        Map<Long, Map<String, MfFolioScheme>> schemeIndex = new HashMap<>();
+        for (MfFolioScheme scheme : schemeRepository.findByFolioIdIn(new HashSet<>(folioIdMap.values()))) {
+            schemeIndex.computeIfAbsent(scheme.getFolioId(), x -> new LinkedHashMap<>())
+                    .put(key(scheme.getScheme()), scheme);
+        }
+        List<MfTmpScheme> tmpSchemes = tmpSchemeRepository.findByOwnerPan(ownerPan);
+        Map<Long, Long> schemeIdMap = new HashMap<>();       // staged id -> accepted id
+        List<MfFolioScheme> addedSchemes = new ArrayList<>();
+        List<MfTmpScheme> addedSchemeSource = new ArrayList<>();
+        for (MfTmpScheme row : tmpSchemes) {
+            Long folioId = folioIdMap.get(row.getFolioId());
+            if (folioId == null) {
+                continue;                                   // its folio was not staged
+            }
+            Map<String, MfFolioScheme> byName = schemeIndex.computeIfAbsent(folioId, x -> new LinkedHashMap<>());
+            MfFolioScheme accepted = byName.get(key(row.getScheme()));
+            if (accepted == null) {
+                MfFolioScheme copy = new MfFolioScheme();
+                copy.setOwnerPan(row.getOwnerPan());
+                copy.setFolioId(folioId);
+                copy.setScheme(row.getScheme());
+                copy.setAdvisor(row.getAdvisor());
+                copy.setRtaCode(row.getRtaCode());
+                copy.setRta(row.getRta());
+                copy.setFundType(row.getFundType());
+                copy.setIsin(row.getIsin());
+                copy.setAmfi(row.getAmfi());
+                copy.setOpenUnits(row.getOpenUnits());
+                copy.setCloseUnits(row.getCloseUnits());
+                copy.setCloseCalculated(row.getCloseCalculated());
+                addedSchemes.add(copy);
+                addedSchemeSource.add(row);
+            } else {
+                if (newest) {
+                    accepted.setAdvisor(row.getAdvisor());
+                    accepted.setRtaCode(row.getRtaCode());
+                    accepted.setRta(row.getRta());
+                    accepted.setFundType(row.getFundType());
+                    accepted.setIsin(row.getIsin());
+                    accepted.setAmfi(row.getAmfi());
+                    accepted.setOpenUnits(row.getOpenUnits());
+                    accepted.setCloseUnits(row.getCloseUnits());
+                    accepted.setCloseCalculated(row.getCloseCalculated());
+                }
+                schemeIdMap.put(row.getId(), accepted.getId());
+            }
+        }
+        schemeRepository.saveAll(addedSchemes);
+        for (int i = 0; i < addedSchemes.size(); i++) {
+            MfTmpScheme source = addedSchemeSource.get(i);
+            schemeIdMap.put(source.getId(), addedSchemes.get(i).getId());
+            schemeIndex.get(folioIdMap.get(source.getFolioId()))
+                    .put(key(source.getScheme()), addedSchemes.get(i));
+        }
+        Set<Long> acceptedSchemeIds = new HashSet<>(schemeIdMap.values());
+
+        // ------------------------------------------------------- valuations
+        Map<Long, MfFolioSchemeValuation> valuationByScheme = new HashMap<>();
+        for (MfFolioSchemeValuation value : valuationRepository.findBySchemeIdIn(acceptedSchemeIds)) {
+            valuationByScheme.put(value.getSchemeId(), value);
+        }
+        List<MfFolioSchemeValuation> addedValuations = new ArrayList<>();
+        for (MfTmpValuation row : tmpValuationRepository.findBySchemeIdIn(schemeIdMap.keySet())) {
+            MfFolioSchemeValuation accepted = valuationByScheme.get(schemeIdMap.get(row.getSchemeId()));
+            if (accepted == null) {
+                MfFolioSchemeValuation copy = new MfFolioSchemeValuation();
+                copy.setOwnerPan(row.getOwnerPan());
+                copy.setSchemeId(schemeIdMap.get(row.getSchemeId()));
+                copy.setValueDate(row.getValueDate());
+                copy.setNav(row.getNav());
+                copy.setCostValue(row.getCostValue());
+                copy.setMarketValue(row.getMarketValue());
+                addedValuations.add(copy);
+            } else if (newest) {
+                accepted.setValueDate(row.getValueDate());
+                accepted.setNav(row.getNav());
+                accepted.setCostValue(row.getCostValue());
+                accepted.setMarketValue(row.getMarketValue());
+            }
+        }
+        valuationRepository.saveAll(addedValuations);
+        for (MfFolioSchemeValuation copy : addedValuations) {
+            valuationByScheme.put(copy.getSchemeId(), copy);
+        }
+
+        // --------------------------------------------------------- nominees
+        Map<Long, List<MfFolioSchemeNominee>> nomineesByScheme = new HashMap<>();
+        for (MfFolioSchemeNominee nominee : nomineeRepository.findBySchemeIdIn(acceptedSchemeIds)) {
+            nomineesByScheme.computeIfAbsent(nominee.getSchemeId(), x -> new ArrayList<>()).add(nominee);
+        }
+        Map<Long, List<String>> namesByStagedScheme = new HashMap<>();
+        for (MfTmpNominee row : tmpNomineeRepository.findBySchemeIdIn(schemeIdMap.keySet())) {
+            namesByStagedScheme.computeIfAbsent(row.getSchemeId(), x -> new ArrayList<>())
+                    .add(row.getNomineeName());
+        }
+        List<MfFolioSchemeNominee> staleNominees = new ArrayList<>();
+        List<MfFolioSchemeNominee> addedNominees = new ArrayList<>();
+        for (Map.Entry<Long, List<String>> entry : namesByStagedScheme.entrySet()) {
+            Long schemeId = schemeIdMap.get(entry.getKey());
+            if (schemeId == null) {
+                continue;
+            }
+            staleNominees.addAll(nomineesByScheme.getOrDefault(schemeId, List.of()));
+            for (String name : entry.getValue()) {
+                MfFolioSchemeNominee copy = new MfFolioSchemeNominee();
+                copy.setOwnerPan(ownerPan);
+                copy.setSchemeId(schemeId);
+                copy.setNomineeName(name);
+                addedNominees.add(copy);
+            }
+        }
+        if (!staleNominees.isEmpty()) {
+            nomineeRepository.deleteAll(staleNominees);
+        }
+        nomineeRepository.saveAll(addedNominees);
+
+        // ----------------------------------------------------------- summary
+        if (newest) {                                           // MF_V3 6
+            summaryRepository.deleteByOwner(ownerPan);
+            List<MfPortfolioSummary> summaries = new ArrayList<>();
+            for (MfTmpPortfolioSummary row : tmpSummaryRepository.findByOwnerPanOrderByAmc(ownerPan)) {
+                MfPortfolioSummary copy = new MfPortfolioSummary();
+                copy.setOwnerPan(row.getOwnerPan());
+                copy.setAmc(row.getAmc());
+                copy.setCostValue(row.getCostValue());
+                copy.setMarketValue(row.getMarketValue());
+                copy.setTotal(row.isTotal());
+                summaries.add(copy);
+            }
+            summaryRepository.saveAll(summaries);
+        }
+
+        // ------------------------------------------------------ transactions
+        Map<Long, String> keyByScheme = new HashMap<>();
+        for (Map.Entry<Long, Map<String, MfFolioScheme>> entry : schemeIndex.entrySet()) {
+            for (MfFolioScheme scheme : entry.getValue().values()) {
+                keyByScheme.put(scheme.getId(),
+                        MfTxnIdentity.schemeKey(folioNoById.get(scheme.getFolioId()), scheme.getScheme()));
+            }
+        }
+        Set<String> identities = new HashSet<>();
+        for (MfFolioSchemeTransaction row : transactionRepository.findBySchemeIdIn(acceptedSchemeIds)) {
+            identities.add(MfTxnIdentity.of(keyByScheme.get(row.getSchemeId()), row.getTxnDate(),
+                    row.getType(), row.getDescription(), row.getAmount(), row.getUnits()));
+        }
+        List<MfFolioSchemeTransaction> addedTxns = new ArrayList<>();
+        for (MfTmpTransaction row : tmpTransactionRepository.findBySchemeIdIn(schemeIdMap.keySet())) {
+            Long schemeId = schemeIdMap.get(row.getSchemeId());
+            String schemeKey = schemeId == null ? null : keyByScheme.get(schemeId);
+            if (schemeKey == null) {
+                continue;
+            }
+            // MF_V3 2 - a row already on file is checked, not written twice;
+            // two identical rows the statement itself prints stay two rows
+            if (identities.contains(MfTxnIdentity.of(schemeKey, row.getTxnDate(), row.getType(),
+                    row.getDescription(), row.getAmount(), row.getUnits()))) {
+                continue;
+            }
+            MfFolioSchemeTransaction copy = new MfFolioSchemeTransaction();
+            copy.setOwnerPan(ownerPan);
+            copy.setSchemeId(schemeId);
+            copy.setTxnDate(row.getTxnDate());
+            copy.setDescription(row.getDescription());
+            copy.setAmount(row.getAmount());
+            copy.setUnits(row.getUnits());
+            copy.setNav(row.getNav());
+            copy.setBalance(row.getBalance());
+            copy.setType(row.getType());
+            copy.setDividendRate(row.getDividendRate());
+            copy.setGiftFolio(row.getGiftFolio());
+            addedTxns.add(copy);
+        }
+        transactionRepository.saveAll(addedTxns);
+
+        // MF_V3 3/6 - the statement that moves the summary also re-books the
+        // adjustment of every scheme it carries, so the ledger left behind
+        // still adds up to the summary it just wrote.
+        if (newest) {
+            Map<Long, MfFolioScheme> carried = new LinkedHashMap<>();
+            Map<Long, MfFolioScheme> allSchemes = new LinkedHashMap<>();
+            for (Map<String, MfFolioScheme> byName : schemeIndex.values()) {
+                for (MfFolioScheme scheme : byName.values()) {
+                    allSchemes.put(scheme.getId(), scheme);
+                }
+            }
+            for (Long schemeId : schemeIdMap.values()) {
+                MfFolioScheme scheme = allSchemes.get(schemeId);
+                if (scheme != null) {
+                    carried.put(schemeId, scheme);
+                }
+            }
+            rebookAdjustments(ownerPan, carried, valuationByScheme);
+        }
+
+        return new Merge(addedFolios.size(), addedSchemes.size(), addedTxns.size());
     }
 
-    private static String key(String scheme, String folio) {
-        return ((scheme == null ? "" : scheme.trim().toLowerCase(Locale.ROOT)) + "|"
-                + (folio == null ? "" : folio.trim().toLowerCase(Locale.ROOT)));
+    /**
+     * MF.md 10 / MF_V3 6 - one ADJUSTED row per scheme so that the ledger of
+     * everything accepted - the rows already on file plus the rows this
+     * statement adds - reaches the cost value and the closing balance the
+     * newest statement prints. Rows booked by an earlier statement are dropped
+     * first, otherwise an extension would carry two adjustments for the same
+     * scheme.
+     */
+    private void rebookAdjustments(String ownerPan, Map<Long, MfFolioScheme> schemes,
+                                   Map<Long, MfFolioSchemeValuation> valuations) {
+        if (schemes.isEmpty()) {
+            return;
+        }
+        Map<Long, BigDecimal> spentAmount = new TreeMap<>();
+        Map<Long, BigDecimal> spentUnits = new TreeMap<>();
+        List<MfFolioSchemeTransaction> stale = new ArrayList<>();
+        for (MfFolioSchemeTransaction row : transactionRepository.findBySchemeIdIn(schemes.keySet())) {
+            if (TxnClassifier.TYPE_ADJUSTED.equals(row.getType())) {
+                stale.add(row);
+            } else {
+                spentAmount.merge(row.getSchemeId(), nvl(row.getAmount()), BigDecimal::add);
+                spentUnits.merge(row.getSchemeId(), nvl(row.getUnits()), BigDecimal::add);
+            }
+        }
+        List<MfFolioSchemeTransaction> fresh = new ArrayList<>();
+        for (MfFolioScheme scheme : schemes.values()) {
+            MfFolioSchemeValuation valuation = valuations.get(scheme.getId());
+            if (valuation == null || valuation.getCostValue() == null) {
+                continue;                       // nothing to reconcile against
+            }
+            BigDecimal amount = valuation.getCostValue()
+                    .subtract(spentAmount.getOrDefault(scheme.getId(), ZERO));
+            BigDecimal units = nvl(scheme.getCloseUnits())
+                    .subtract(nvl(scheme.getOpenUnits()).add(spentUnits.getOrDefault(scheme.getId(), ZERO)));
+            if (amount.signum() == 0 && units.signum() == 0) {
+                continue;                       // the ledger already reaches the summary
+            }
+            MfFolioSchemeTransaction row = new MfFolioSchemeTransaction();
+            row.setOwnerPan(ownerPan);
+            row.setSchemeId(scheme.getId());
+            row.setTxnDate(valuation.getValueDate());
+            row.setDescription(ADJUSTED_DESCRIPTION);
+            row.setAmount(amount);
+            row.setUnits(units);
+            row.setNav(valuation.getNav());
+            row.setBalance(scheme.getCloseUnits());
+            row.setType(TxnClassifier.TYPE_ADJUSTED);
+            fresh.add(row);
+        }
+        if (!stale.isEmpty()) {
+            transactionRepository.deleteAll(stale);
+        }
+        transactionRepository.saveAll(fresh);
     }
 
-    // ----------------------------------------------------------------- checks
-
-    private Map<String, Object> totalCheck(String name, double expected, double actual) {
-        double tol = Math.max(1.0, Math.abs(expected) * TOTAL_TOL);
-        boolean pass = Math.abs(expected - actual) <= tol;
-        return check(name, pass ? "PASS" : "FAIL",
-                MfUtil.round(expected, 2) + "", MfUtil.round(actual, 2) + "",
-                pass ? "Matches the report total"
-                        : String.format("Differs from the report total by %.2f", actual - expected));
+    /**
+     * MF_V3 6 - the printed summary always holds the current worth of the
+     * investment, so it may only be copied over by a statement whose period
+     * ends no earlier than everything accepted before it. A statement that
+     * ends earlier is history: it can still add a missing transaction, but it
+     * can never move a total.
+     */
+    private boolean isNewerThanAccepted(MfImportBatch batch, String ownerPan) {
+        LocalDate acceptedTo = batchRepository.findByPanAndStatusOrderByUploadedAtDesc(ownerPan, "ACCEPTED")
+                .stream()
+                .filter(other -> !Objects.equals(other.getId(), batch.getId()))
+                .map(MfImportBatch::getReportTo)
+                .filter(Objects::nonNull)
+                .max(LocalDate::compareTo)
+                .orElse(null);
+        return acceptedTo == null || batch.getReportTo() == null || !batch.getReportTo().isBefore(acceptedTo);
     }
 
-    private Map<String, Object> check(String name, String severity, String expected,
-                                       String actual, String message) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("name", name);
-        m.put("severity", severity);
-        m.put("expected", expected);
-        m.put("actual", actual);
-        m.put("message", message);
-        return m;
+    /** Matching key of a printed number or name across the two table sets. */
+    private static String key(String printed) {
+        return printed == null ? "" : printed.trim();
     }
 
-    // ----------------------------------------------------------------- shared
+    // --------------------------------------------------------------- helpers
 
-    /** Description -> transaction type (deterministic, so dedupe keys agree). */
-    static String inferTxnType(String description, double units, double amount) {
-        String d = description == null ? "" : description.toLowerCase(Locale.ROOT);
-        if (d.contains("systematic") || d.contains(" sip ") || d.startsWith("sip")
-                || d.contains("(sip")) return MfConstants.TXN_SIP_INSTALMENT;
-        if (d.contains("switch out")) return MfConstants.TXN_SWITCH_OUT;
-        if (d.contains("switch in")) return MfConstants.TXN_SWITCH_IN;
-        if (d.contains("redemption") || d.contains("withdrawal") || d.contains("reversal"))
-            return MfConstants.TXN_REDEMPTION;
-        if (d.contains("dividend") || d.contains("bonus")) return MfConstants.TXN_DIVIDEND;
-        if (d.contains("purchase") || d.contains("subscription") || d.contains("additional"))
-            return MfConstants.TXN_PURCHASE;
-        if (units < 0 || amount < 0) return MfConstants.TXN_REDEMPTION;
-        if (units > 0 || amount > 0) return MfConstants.TXN_PURCHASE;
-        return MfConstants.TXN_OTHER;
+    private MfImportBatch load(Long batchId, String ownerPan) {
+        return batchRepository.findByIdAndPan(batchId, ownerPan).stream().findFirst()
+                .orElseThrow(() -> new RuntimeException("Import " + batchId + " was not found for this client"));
     }
 
-    private static String trim(String s) {
-        return s == null ? "" : s.trim();
+    private String toJson(KfCasReport report) {
+        // Jackson 3 (tools.jackson) - the same mapper the parsed JSON sample is
+        // written with, so the download matches the report's own JSON shape.
+        return mapper.writeValueAsString(report);
+    }
+
+    /**
+     * The parser decides the message the screen shows: a protected file without
+     * a password, a wrong password, or a file that is not a statement
+     * (MF.md 3). Anything else - a broken pdf - falls back to the generic one.
+     */
+    private static KfCasReport parse(byte[] data, String password) {
+        try {
+            return new KfCasParser().parse(data, password);
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException(KfCasParser.UNREADABLE_MSG, e);
+        }
+    }
+
+    private static BigDecimal dec(String printed) {
+        return printed == null || printed.isBlank() ? null : new BigDecimal(printed);
+    }
+
+    private static BigDecimal nvl(BigDecimal value) {
+        return value == null ? ZERO : value;
+    }
+
+    /** "2022-11-25" -> LocalDate, tolerating the printed "25-Nov-2022" form. */
+    private static LocalDate isoDate(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(value);
+        } catch (java.time.format.DateTimeParseException e) {
+            return printedDate(value);
+        }
+    }
+
+    private static LocalDate printedDate(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return LocalDate.parse(value.trim(), PRINTED_DATE);
     }
 }

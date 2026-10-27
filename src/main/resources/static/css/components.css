@@ -262,6 +262,13 @@ tr.row-MAPPED     { background: var(--color-info-soft) !important; }
 tr.row-ERROR      { background: var(--color-fail-soft) !important; }
 tr.row-SKIPPED     { background: #f4f5f7 !important; color: var(--color-text-muted); }
 
+/* reconciliation report row tones (MF.md 12: green / highlighted / red) */
+tr.tone-green  { background: var(--color-pass-soft) !important; }
+tr.tone-amber  { background: var(--color-warn-soft) !important; }
+tr.tone-red    { background: var(--color-fail-soft) !important; }
+tr.tone-blue   { background: var(--color-info-soft) !important; }
+tr.tone-grey   { background: var(--color-neutral-soft) !important; color: var(--color-text-muted); }
+
 /* -------------------------------------------------------------- filters --- */
 .filter-section {
     background: var(--color-surface);

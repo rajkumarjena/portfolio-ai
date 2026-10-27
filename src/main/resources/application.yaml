@@ -95,6 +95,14 @@ pf:
   dateFormat:
     monthlyInput: yyyy-MM
     dateInput: yyyy-MM-dd
+# MF.md 12e: how far the totals of a KFINTECH upload may drift from the
+# statement's own summary before the reconciliation report stops being green.
+# Percent values, one per measured total - units, cost value, market value.
+mf:
+  reconciliation:
+    tolerance-units-percent: 0.5
+    tolerance-cost-percent: 0.5
+    tolerance-market-percent: 0.5
 app:
   config:
     refreshRateDuration: PT15M
