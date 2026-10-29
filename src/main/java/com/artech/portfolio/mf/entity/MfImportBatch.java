@@ -44,9 +44,12 @@ public class MfImportBatch {
     /** UPLOADED | ACCEPTED | DISCARDED. */
     private String status = "UPLOADED";
 
-    /** Statement period printed in the page header. */
+    /** Statement period printed in the page header; summary batches store only reportTo. */
     @Column(name = "report_from")
     private LocalDate reportFrom;
+
+    @Column(name = "statement_kind", length = 20)
+    private String statementKind = "DETAIL";
 
     @Column(name = "report_to")
     private LocalDate reportTo;

@@ -12,7 +12,8 @@ import java.util.List;
 /** Temporary PORTFOLIO SUMMARY rows (MF.md 7a/9). */
 public interface MfTmpPortfolioSummaryRepository extends JpaRepository<MfTmpPortfolioSummary, Long> {
 
-    List<MfTmpPortfolioSummary> findByOwnerPanOrderByAmc(String ownerPan);
+    @Query("select s from MfTmpPortfolioSummary s left join fetch s.amcReference where s.ownerPan = :ownerPan order by s.amcId")
+    List<MfTmpPortfolioSummary> findByOwnerPanOrderByAmc(@Param("ownerPan") String ownerPan);
 
     @Modifying
     @Transactional

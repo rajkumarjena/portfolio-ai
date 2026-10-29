@@ -16,6 +16,8 @@ public interface ClientRepository extends JpaRepository<Client, Long> {
     // (same pattern as CashFlowDataRepository.findByBondId) and works fine.
     List<Client> findByPan(String pan);
 
+    List<Client> findByPanIgnoreCase(String pan);
+
     // Password reset token lookup - also List-returning to avoid the SQLite
     // "fetch first ? rows only" limitation described above.
     List<Client> findByResetTokenHash(String resetTokenHash);

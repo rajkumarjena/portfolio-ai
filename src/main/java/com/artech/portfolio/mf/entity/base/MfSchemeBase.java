@@ -26,6 +26,10 @@ public abstract class MfSchemeBase {
     @Column(name = "folio_id", nullable = false)
     private Long folioId;
 
+    /** Report source that last refreshed this snapshot row. */
+    @Column(name = "refresh_from", length = 30)
+    private String refreshFrom;
+
     @Column(name = "owner_pan", nullable = false, length = 20)
     private String ownerPan;
 

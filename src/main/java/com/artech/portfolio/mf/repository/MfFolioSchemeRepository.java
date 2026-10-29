@@ -13,9 +13,13 @@ import java.util.List;
 /** Accepted scheme holdings (MF.md 7c). */
 public interface MfFolioSchemeRepository extends JpaRepository<MfFolioScheme, Long> {
 
-    List<MfFolioScheme> findByOwnerPan(String ownerPan);
+    @Query("select s from MfFolioScheme s join fetch s.folioReference where s.ownerPan = :ownerPan")
+    List<MfFolioScheme> findByOwnerPan(@Param("ownerPan") String ownerPan);
 
-    List<MfFolioScheme> findByFolioIdIn(Collection<Long> folioIds);
+    @Query("select s from MfFolioScheme s join fetch s.folioReference where s.folioId in :folioIds")
+    List<MfFolioScheme> findByFolioIdIn(@Param("folioIds") Collection<Long> folioIds);
+
+    List<MfFolioScheme> findByFolioId(Long folioId);
 
     @Modifying
     @Transactional

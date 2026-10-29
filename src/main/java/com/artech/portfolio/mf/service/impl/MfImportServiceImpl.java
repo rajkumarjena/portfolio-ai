@@ -30,6 +30,7 @@ import com.artech.portfolio.mf.repository.tmp.MfTmpSchemeRepository;
 import com.artech.portfolio.mf.repository.tmp.MfTmpTransactionRepository;
 import com.artech.portfolio.mf.repository.tmp.MfTmpValuationRepository;
 import com.artech.portfolio.mf.service.MfImportService;
+import com.artech.portfolio.mf.service.MfAmcResolver;
 import com.artech.portfolio.mf.util.MfTxnIdentity;
 import tools.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
@@ -90,6 +91,7 @@ public class MfImportServiceImpl implements MfImportService {
     private final MfFolioSchemeTransactionRepository transactionRepository;
 
     private final TransactionTemplate transactions;
+    private final MfAmcResolver amcResolver;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public MfImportServiceImpl(MfImportBatchRepository batchRepository,
@@ -105,7 +107,8 @@ public class MfImportServiceImpl implements MfImportService {
                                MfFolioSchemeNomineeRepository nomineeRepository,
                                MfFolioSchemeValuationRepository valuationRepository,
                                MfFolioSchemeTransactionRepository transactionRepository,
-                               PlatformTransactionManager transactionManager) {
+                               PlatformTransactionManager transactionManager,
+                               MfAmcResolver amcResolver) {
         this.batchRepository = batchRepository;
         this.tmpSummaryRepository = tmpSummaryRepository;
         this.tmpFolioRepository = tmpFolioRepository;
@@ -120,6 +123,7 @@ public class MfImportServiceImpl implements MfImportService {
         this.valuationRepository = valuationRepository;
         this.transactionRepository = transactionRepository;
         this.transactions = new TransactionTemplate(transactionManager);
+        this.amcResolver = amcResolver;
     }
 
     // ----------------------------------------------------------------- upload
@@ -228,6 +232,9 @@ public class MfImportServiceImpl implements MfImportService {
     @Override
     public void discard(Long batchId, String ownerPan) {
         MfImportBatch batch = load(batchId, ownerPan);
+        if ("ACCEPTED".equals(batch.getStatus())) {
+            throw new IllegalArgumentException("An accepted import cannot be discarded.");
+        }
         transactions.executeWithoutResult(status -> purgeTemporary(ownerPan));
         batch.setStatus("DISCARDED");
         batch.setValidStatus("PENDING");
@@ -251,7 +258,12 @@ public class MfImportServiceImpl implements MfImportService {
         for (KfCasReport.SummaryRow row : report.summary) {
             MfTmpPortfolioSummary summary = new MfTmpPortfolioSummary();
             summary.setOwnerPan(ownerPan);
-            summary.setAmc(row.amc);
+            summary.setAmc(row.total ? "Total" : row.amc);
+            if (!row.total) {
+                var amc = amcResolver.resolve(row.amc);
+                if (amc != null) summary.setAmcId(amc.getId());
+            }
+            summary.setMatchCondition("DETAIL_STATEMENT");
             summary.setCostValue(dec(row.cost));
             summary.setMarketValue(dec(row.market));
             summary.setTotal(row.total);
@@ -264,7 +276,9 @@ public class MfImportServiceImpl implements MfImportService {
             MfTmpFolio entity = new MfTmpFolio();
             entity.setOwnerPan(ownerPan);
             entity.setFolioNo(folio.folio);
-            entity.setAmc(folio.amc);
+            var amc = amcResolver.resolve(folio.amc);
+            if (amc != null) entity.setAmcId(amc.getId());
+            entity.setRefreshFrom("DETAIL_STATEMENT");
             entity.setInvestorName(folio.name);
             entity.setFolioPan(folio.pan);
             entity.setKyc(folio.kyc);
@@ -280,6 +294,7 @@ public class MfImportServiceImpl implements MfImportService {
                 MfTmpScheme entity = new MfTmpScheme();
                 entity.setOwnerPan(ownerPan);
                 entity.setFolioId(folios.get(i).getId());
+                entity.setRefreshFrom("DETAIL_STATEMENT");
                 entity.setScheme(scheme.scheme);
                 entity.setAdvisor(scheme.advisor);
                 entity.setRtaCode(scheme.rtaCode);
@@ -424,9 +439,11 @@ public class MfImportServiceImpl implements MfImportService {
         // ----------------------------------------------------------- folios
         Map<String, MfFolio> folioByNo = new LinkedHashMap<>();
         Map<Long, String> folioNoById = new HashMap<>();
+        Map<Long, MfFolio> folioById = new HashMap<>();
         for (MfFolio folio : folioRepository.findByOwnerPanOrderByFolioNo(ownerPan)) {
             folioByNo.put(key(folio.getFolioNo()), folio);
             folioNoById.put(folio.getId(), folio.getFolioNo());
+            folioById.put(folio.getId(), folio);
         }
         Map<Long, Long> folioIdMap = new HashMap<>();       // staged id -> accepted id
         List<MfFolio> addedFolios = new ArrayList<>();
@@ -437,7 +454,9 @@ public class MfImportServiceImpl implements MfImportService {
                 MfFolio copy = new MfFolio();
                 copy.setOwnerPan(row.getOwnerPan());
                 copy.setFolioNo(row.getFolioNo());
-                copy.setAmc(row.getAmc());
+                var amc = amcResolver.resolve(row.getAmc());
+                if (amc != null) copy.setAmcId(amc.getId());
+                copy.setRefreshFrom("DETAIL_STATEMENT");
                 copy.setInvestorName(row.getInvestorName());
                 copy.setFolioPan(row.getFolioPan());
                 copy.setKyc(row.getKyc());
@@ -445,23 +464,30 @@ public class MfImportServiceImpl implements MfImportService {
                 addedFolios.add(copy);
                 addedFolioSource.add(row);
             } else {
-                if (newest) {
-                    accepted.setAmc(row.getAmc());
-                    accepted.setInvestorName(row.getInvestorName());
-                    accepted.setFolioPan(row.getFolioPan());
-                    accepted.setKyc(row.getKyc());
-                    accepted.setPanKyc(row.getPanKyc());
-                }
+                var amc = amcResolver.resolve(row.getAmc());
+                if (amc != null) accepted.setAmcId(amc.getId());
+                accepted.setRefreshFrom("DETAIL_STATEMENT");
+                accepted.setInvestorName(row.getInvestorName());
+                accepted.setFolioPan(row.getFolioPan());
+                accepted.setKyc(row.getKyc());
+                accepted.setPanKyc(row.getPanKyc());
                 folioIdMap.put(row.getId(), accepted.getId());
             }
         }
         folioRepository.saveAll(addedFolios);
+        for (MfFolio folio : addedFolios) folioByNo.put(key(folio.getFolioNo()), folio);
         for (int i = 0; i < addedFolios.size(); i++) {
             MfTmpFolio source = addedFolioSource.get(i);
             folioIdMap.put(source.getId(), addedFolios.get(i).getId());
             folioByNo.put(key(source.getFolioNo()), addedFolios.get(i));
             folioNoById.put(addedFolios.get(i).getId(), addedFolios.get(i).getFolioNo());
+            folioById.put(addedFolios.get(i).getId(), addedFolios.get(i));
         }
+        for (MfTmpFolio row : tmpFolios) {
+            MfFolio accepted = folioByNo.get(key(row.getFolioNo()));
+            if (accepted != null) folioIdMap.put(row.getId(), accepted.getId());
+        }
+        folioRepository.saveAll(folioByNo.values());
 
         // ---------------------------------------------------------- schemes
         Map<Long, Map<String, MfFolioScheme>> schemeIndex = new HashMap<>();
@@ -484,6 +510,7 @@ public class MfImportServiceImpl implements MfImportService {
                 MfFolioScheme copy = new MfFolioScheme();
                 copy.setOwnerPan(row.getOwnerPan());
                 copy.setFolioId(folioId);
+                copy.setRefreshFrom("DETAIL_STATEMENT");
                 copy.setScheme(row.getScheme());
                 copy.setAdvisor(row.getAdvisor());
                 copy.setRtaCode(row.getRtaCode());
@@ -497,17 +524,16 @@ public class MfImportServiceImpl implements MfImportService {
                 addedSchemes.add(copy);
                 addedSchemeSource.add(row);
             } else {
-                if (newest) {
-                    accepted.setAdvisor(row.getAdvisor());
-                    accepted.setRtaCode(row.getRtaCode());
-                    accepted.setRta(row.getRta());
-                    accepted.setFundType(row.getFundType());
-                    accepted.setIsin(row.getIsin());
-                    accepted.setAmfi(row.getAmfi());
-                    accepted.setOpenUnits(row.getOpenUnits());
-                    accepted.setCloseUnits(row.getCloseUnits());
-                    accepted.setCloseCalculated(row.getCloseCalculated());
-                }
+                accepted.setAdvisor(row.getAdvisor());
+                accepted.setRtaCode(row.getRtaCode());
+                accepted.setRta(row.getRta());
+                accepted.setFundType(row.getFundType());
+                accepted.setIsin(row.getIsin());
+                accepted.setAmfi(row.getAmfi());
+                accepted.setRefreshFrom("DETAIL_STATEMENT");
+                accepted.setOpenUnits(row.getOpenUnits());
+                accepted.setCloseUnits(row.getCloseUnits());
+                accepted.setCloseCalculated(row.getCloseCalculated());
                 schemeIdMap.put(row.getId(), accepted.getId());
             }
         }
@@ -537,7 +563,7 @@ public class MfImportServiceImpl implements MfImportService {
                 copy.setCostValue(row.getCostValue());
                 copy.setMarketValue(row.getMarketValue());
                 addedValuations.add(copy);
-            } else if (newest) {
+            } else {
                 accepted.setValueDate(row.getValueDate());
                 accepted.setNav(row.getNav());
                 accepted.setCostValue(row.getCostValue());
@@ -581,13 +607,15 @@ public class MfImportServiceImpl implements MfImportService {
         nomineeRepository.saveAll(addedNominees);
 
         // ----------------------------------------------------------- summary
-        if (newest) {                                           // MF_V3 6
+        {                                                       // MF_V5 7: snapshot rows always follow the accepted report
             summaryRepository.deleteByOwner(ownerPan);
             List<MfPortfolioSummary> summaries = new ArrayList<>();
             for (MfTmpPortfolioSummary row : tmpSummaryRepository.findByOwnerPanOrderByAmc(ownerPan)) {
                 MfPortfolioSummary copy = new MfPortfolioSummary();
                 copy.setOwnerPan(row.getOwnerPan());
-                copy.setAmc(row.getAmc());
+                copy.setAmcId(row.getAmcId());
+                copy.setRefreshFrom("DETAIL_STATEMENT");
+                copy.setMatchCondition("DETAIL_STATEMENT");
                 copy.setCostValue(row.getCostValue());
                 copy.setMarketValue(row.getMarketValue());
                 copy.setTotal(row.isTotal());
@@ -638,9 +666,8 @@ public class MfImportServiceImpl implements MfImportService {
         }
         transactionRepository.saveAll(addedTxns);
 
-        // MF_V3 3/6 - the statement that moves the summary also re-books the
-        // adjustment of every scheme it carries, so the ledger left behind
-        // still adds up to the summary it just wrote.
+        // Rebook only when the statement advances accepted history; an older
+        // statement may refresh snapshot tables but must not rewrite ledger adjustments.
         if (newest) {
             Map<Long, MfFolioScheme> carried = new LinkedHashMap<>();
             Map<Long, MfFolioScheme> allSchemes = new LinkedHashMap<>();

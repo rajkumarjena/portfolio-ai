@@ -5,6 +5,11 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.MappedSuperclass;
+import jakarta.persistence.Transient;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.JoinColumn;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Data;
 
 /**
@@ -28,9 +33,33 @@ public abstract class MfFolioBase {
     @Column(name = "folio_no", nullable = false, length = 40)
     private String folioNo;
 
-    /** AMC the folio belongs to ("HDFC Mutual Fund"). */
-    @Column(name = "amc", length = 120)
+    /** Foreign key to the normalized AMC master row. */
+    @Column(name = "amc_id")
+    private Long amcId;
+
+    /** Display-only compatibility value; the database stores only amc_id. */
+    @Transient
     private String amc;
+
+    /** Report source that last refreshed this snapshot row. */
+    @Column(name = "refresh_from", length = 30)
+    private String refreshFrom;
+
+    @JsonIgnore
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "amc_id", insertable = false, updatable = false,
+            foreignKey = @jakarta.persistence.ForeignKey(jakarta.persistence.ConstraintMode.NO_CONSTRAINT))
+    @lombok.ToString.Exclude
+    @lombok.EqualsAndHashCode.Exclude
+    private com.artech.portfolio.mf.entity.MfAmc amcReference;
+
+    public String getAmc() {
+        return amc != null ? amc : (amcReference == null ? null : amcReference.getName());
+    }
+
+    public void setAmc(String amc) {
+        this.amc = amc;
+    }
 
     /** Investor name printed under the folio header. */
     @Column(name = "investor_name", length = 120)

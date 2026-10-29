@@ -108,8 +108,30 @@ public class MfReconciliationServiceImpl implements MfReconciliationService {
         MfImportBatch batch = batchRepository.findByIdAndPan(batchId, ownerPan).stream().findFirst()
                 .orElseThrow(() -> new RuntimeException("Import " + batchId + " was not found for this client"));
 
-        Snapshot temp = loadTemporary(ownerPan);
         Snapshot accepted = loadPermanent(ownerPan);
+        if ("DISCARDED".equals(batch.getStatus())) {
+            // Discard removes the staged rows. Do not compare that intentionally
+            // empty staging area with accepted history: doing so would falsely
+            // report every accepted transaction as missing (MF_V4 1).
+            List<Map<String, Object>> emptyReports = List.of(
+                    unchanged(1, "New transactions in this upload", "This upload was discarded; no rows remain to reconcile."),
+                    unchanged(2, "AMC summary against its transactions", "This upload was discarded; no rows remain to reconcile."),
+                    unchanged(3, "ADJUSTED amount changes", "This upload was discarded; no rows remain to reconcile."),
+                    unchanged(4, "Missing / out of sequence transactions", "This upload was discarded; no rows remain to reconcile."),
+                    unchanged(5, "Totals against the summary (tolerance)", "This upload was discarded; no rows remain to reconcile."));
+            Map<String, Object> empty = new LinkedHashMap<>();
+            empty.put("batch", batch);
+            empty.put("hasAcceptedData", !accepted.schemes.isEmpty());
+            empty.put("coverage", Map.of("covered", false, "note", ""));
+            empty.put("status", "GREEN");
+            empty.put("counts", Map.of("newTransactions", 0, "amcMismatches", 0,
+                    "adjustedChanges", 0, "missingTransactions", 0, "failedChecks", 0));
+            empty.put("reports", emptyReports);
+            empty.put("tolerance", Map.of("unitsPercent", unitsTolerance,
+                    "costPercent", costTolerance, "marketPercent", marketTolerance));
+            return empty;
+        }
+        Snapshot temp = loadTemporary(ownerPan);
         Coverage coverage = coverage(batch, ownerPan);
 
         Map<String, Object> report1 = report1NewTransactions(temp, accepted);
@@ -143,7 +165,12 @@ public class MfReconciliationServiceImpl implements MfReconciliationService {
         body.put("batch", batch);
         body.put("hasAcceptedData", !accepted.schemes.isEmpty());
         body.put("coverage", coverage.asMap());
-        body.put("status", overallStatus(reports));
+        String status = overallStatus(reports);
+        body.put("status", status);
+        if (!Objects.equals(batch.getValidStatus(), status)) {
+            batch.setValidStatus(status);
+            batchRepository.save(batch);
+        }
         body.put("counts", counts);
         body.put("reports", reports);
         body.put("tolerance", Map.of("unitsPercent", unitsTolerance,

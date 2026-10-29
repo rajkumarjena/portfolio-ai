@@ -63,7 +63,7 @@ const REPORT_FILTERS = {
 
 // MF_V2 3 - rows drawn per window; scrolling past the last drawn row appends
 // the next window.
-const PAGE_SIZE = 100;
+const PAGE_SIZE = 50;
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -179,11 +179,13 @@ function sectionFor(report) {
             <div class="muted" style="margin-bottom:8px;">${esc(report.note || '')}</div>
             ${filterBar(report, rows)}
             <div class="muted" id="range-${report.id}" style="margin-bottom:6px;"></div>
-            <table class="data-table">
-                <thead><tr>${head}</tr></thead>
-                <tbody id="rows-${report.id}"></tbody>
-            </table>
-            <div class="muted" id="more-${report.id}" style="display:none; text-align:center; padding:6px;"></div>
+            <div class="mf-report-scroll" id="scroll-${report.id}" style="max-height:65vh; overflow-y:auto;">
+                <table class="data-table">
+                    <thead><tr>${head}</tr></thead>
+                    <tbody id="rows-${report.id}"></tbody>
+                </table>
+                <div class="muted" id="more-${report.id}" style="display:none; text-align:center; padding:6px;"></div>
+            </div>
         </section>`;
     const section = holder.firstElementChild;
     mount(section, report, columns, rows);
@@ -222,6 +224,7 @@ function mount(section, report, columns, rows) {
         drawn: 0,
         body: section.querySelector('#rows-' + report.id),
         more: section.querySelector('#more-' + report.id),
+        scroll: section.querySelector('#scroll-' + report.id),
         range: section.querySelector('#range-' + report.id),
         observer: null
     };
@@ -369,11 +372,12 @@ function watchScroll(view) {
         ticking = true;
         requestAnimationFrame(() => {
             ticking = false;
-            const rect = view.more.getBoundingClientRect();
-            if (rect.top < window.innerHeight + 300) appendWindow(view);
+            const sentinel = view.more.getBoundingClientRect();
+            const container = view.scroll.getBoundingClientRect();
+            if (sentinel.top < container.bottom + 300) appendWindow(view);
         });
     };
-    window.addEventListener('scroll', view.onScroll, {passive: true});
+    view.scroll.addEventListener('scroll', view.onScroll, {passive: true});
 }
 
 // MF_V2 3 - the next 100 rows are fetched from memory only when the sentinel
@@ -390,14 +394,14 @@ function observe(view) {
                 appendWindow(view);
             }
         }
-    }, {rootMargin: '300px'});
+    }, {root: view.scroll, rootMargin: '300px'});
     view.observer.observe(view.more);
 }
 
 function closeViews() {
     Object.values(views).forEach(view => {
         if (view.observer) view.observer.disconnect();
-        if (view.onScroll) window.removeEventListener('scroll', view.onScroll);
+        if (view.onScroll) view.scroll.removeEventListener('scroll', view.onScroll);
     });
     Object.keys(views).forEach(key => delete views[key]);
 }

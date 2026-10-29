@@ -3,6 +3,7 @@ package com.artech.portfolio.mf;
 import com.artech.portfolio.mf.entity.MfFolioSchemeTransaction;
 import com.artech.portfolio.mf.entity.MfImportBatch;
 import com.artech.portfolio.mf.parser.KfCasParser;
+import com.artech.portfolio.mf.repository.MfAmcRepository;
 import com.artech.portfolio.mf.repository.MfFolioRepository;
 import com.artech.portfolio.mf.repository.MfFolioSchemeNomineeRepository;
 import com.artech.portfolio.mf.repository.MfFolioSchemeRepository;
@@ -107,6 +108,9 @@ class MfImportFlowTest {
 
     @Autowired
     private MfTmpPortfolioSummaryRepository tmpSummaryRepository;
+
+    @Autowired
+    private MfAmcRepository amcRepository;
 
     @Autowired
     private MfFolioRepository folioRepository;
@@ -225,8 +229,24 @@ class MfImportFlowTest {
         Map<String, Object> accepted = importService.accept(batch.getId(), OWNER);
         assertEquals("ACCEPTED", ((MfImportBatch) accepted.get("batch")).getStatus());
         assertFalse(folioRepository.findByOwnerPanOrderByFolioNo(OWNER).isEmpty());
+        assertTrue(folioRepository.findByOwnerPanOrderByFolioNo(OWNER).stream()
+                .allMatch(folio -> folio.getAmcId() != null
+                        && "DETAIL_STATEMENT".equals(folio.getRefreshFrom())),
+                "accepted detail folios reference normalized AMC and record their refresh source");
+        assertTrue(amcRepository.count() > 0, "detail import populates the normalized AMC table");
         assertFalse(schemeRepository.findByOwnerPan(OWNER).isEmpty());
+        assertTrue(schemeRepository.findByOwnerPan(OWNER).stream()
+                .allMatch(scheme -> scheme.getFolioReference() != null
+                        && scheme.getFolioReference().getAmcId() != null
+                        && "DETAIL_STATEMENT".equals(scheme.getRefreshFrom())),
+                "accepted detail schemes resolve their AMC through their parent folio and record refresh source");
         assertFalse(transactionRepository.findByOwnerPan(OWNER).isEmpty());
+        assertTrue(summaryRepository.findByOwnerPanOrderByAmc(OWNER).stream()
+                .filter(row -> !row.isTotal())
+                .allMatch(row -> row.getAmcId() != null
+                        && "DETAIL_STATEMENT".equals(row.getRefreshFrom())
+                        && "DETAIL_STATEMENT".equals(row.getMatchCondition())),
+                "detail summaries carry AMC ID and source condition");
         assertEquals(batch.getTxnCount(), transactionRepository.findByOwnerPan(OWNER).size(),
                 "accepted rows equal the staged rows");
 
@@ -246,6 +266,27 @@ class MfImportFlowTest {
                 "every total is inside the tolerance: " + rowsOf(againReports, 5));
         assertEquals("GREEN", again.get("status"),
                 "re-reading the accepted statement reconciles cleanly: " + again.get("counts"));
+
+        // The duplicate upload is green with no deltas. Discarding it clears
+        // staging; the reconciliation endpoint must not then call every
+        // accepted ledger row "missing" (MF_V4 1).
+        Map<String, Object> cleanBeforeDiscard = reconciliationService.report(secondBatch.getId(), OWNER);
+        assertEquals("GREEN", cleanBeforeDiscard.get("status"));
+        importService.discard(secondBatch.getId(), OWNER);
+        Map<String, Object> cleanAfterDiscard = reconciliationService.report(secondBatch.getId(), OWNER);
+        assertEquals("GREEN", cleanAfterDiscard.get("status"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> discardedCounts = (Map<String, Object>) cleanAfterDiscard.get("counts");
+        for (String key : List.of("newTransactions", "amcMismatches", "adjustedChanges",
+                "missingTransactions", "failedChecks")) {
+            assertEquals(0, ((Number) discardedCounts.get(key)).intValue(), key);
+        }
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> discardedReports = (List<Map<String, Object>>) cleanAfterDiscard.get("reports");
+        assertEquals(5, discardedReports.size());
+        assertTrue(discardedReports.stream().allMatch(one -> "green".equals(one.get("status"))
+                        && ((List<?>) one.get("rows")).isEmpty()),
+                "a discarded upload has no reconciliation rows");
 
         // the import history keeps both uploads (MF.md 17)
         assertEquals(2, importService.listBatches(OWNER).size());
@@ -332,7 +373,12 @@ class MfImportFlowTest {
                 "an older statement may not move the summary");
         assertEquals(acceptedTxns, transactionRepository.findByOwnerPan(OWNER).size());
         assertEquals(acceptedSchemes, schemeRepository.findByOwnerPan(OWNER).size());
-        assertEquals(acceptedSummaryRows, summaryRepository.findByOwnerPanOrderByAmc(OWNER).size());
+        assertTrue(summaryRepository.findByOwnerPanOrderByAmc(OWNER).size() > 0);
+        assertTrue(summaryRepository.findByOwnerPanOrderByAmc(OWNER).stream()
+                .filter(row -> !row.isTotal())
+                .allMatch(row -> "DETAIL_STATEMENT".equals(row.getRefreshFrom())
+                        && "DETAIL_STATEMENT".equals(row.getMatchCondition())),
+                "MF_V5 refreshes the snapshot and marks it as sourced from the accepted detail report");
     }
 
     /** MF_V3 3 - the one red case: a row inside the period the data on file lost. */
