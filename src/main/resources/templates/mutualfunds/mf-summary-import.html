@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: page('Import MF Summary Statement', ~{:: #content}, ~{:: #scripts})}">
+<body>
+<main id="content" th:fragment="content" class="content">
+    <h1>Import Mutual Fund Summary Statement</h1>
+    <p class="muted">Upload a password-protected consolidated account summary. The email address and as-on date are validated before the statement can update your portfolio.</p>
+    <div class="nav-buttons"><a class="btn" href="/mutualfunds/mf-import.html">Detailed Statement Import</a><a class="btn" href="/index.html">Home</a></div>
+    <div class="form-container">
+        <div class="form-left">
+            <form id="summaryUploadForm">
+                <label for="summaryFile">Summary PDF</label><input id="summaryFile" type="file" accept=".pdf" required>
+                <label for="summaryPassword">PDF password</label><input id="summaryPassword" type="password" autocomplete="off">
+                <div id="summaryUploadMessage" class="muted" role="status"></div>
+                <button id="summaryUploadButton" class="primary" type="submit">Upload and reconcile</button>
+            </form>
+        </div>
+    </div>
+    <div id="summaryReview" style="display:none;">
+        <h2>Summary reconciliation</h2><div id="summaryBanner" class="status-banner"></div>
+        <div id="summaryTotals" class="cards"></div>
+        <div id="summaryTableScroll" class="table-scroll" style="overflow-x:auto;"><table class="data-table"><thead><tr><th>Folio (locked)</th><th>AMC</th><th>Scheme</th><th>ISIN</th><th>Cost</th><th>Units</th><th>NAV date</th><th>Price</th><th>Market value</th><th>Status</th></tr></thead><tbody id="summaryRows"></tbody></table></div>
+        <button id="summaryAccept" class="good" type="button">Accept summary</button>
+        <button id="summaryDiscard" class="danger" type="button">Discard summary</button>
+    </div>
+</main>
+<th:block id="scripts" th:fragment="scripts"><script th:src="@{/js/modules/mf-summary-import.js}"></script></th:block>
+</body>
+</html>
