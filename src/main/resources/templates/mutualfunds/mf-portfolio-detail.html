@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: page('Mutual Fund Portfolio Details', ~{:: #content}, ~{:: #scripts})}">
+<body>
+<main id="content" th:fragment="content" class="content">
+    <div class="nav-buttons" style="margin-top:0;">
+        <a class="btn" id="backLink" href="/mutualfunds/mf-portfolio.html"><i data-lucide="arrow-left"></i>Back to Mutual Fund Portfolios</a>
+        <a class="btn" id="allTransactions" href="/mutualfunds/mf-portfolio-transactions.html"><i data-lucide="list"></i>All Transactions</a>
+    </div>
+    <h1 id="detailHeading">Mutual Fund Portfolio Details</h1>
+    <div id="detailMessage" class="muted" role="status" style="padding:12px;">Loading details…</div>
+
+    <div class="filter-section">
+        <label for="fromDate">From</label><input type="date" id="fromDate">
+        <label for="toDate">To</label><input type="date" id="toDate">
+        <label for="schemeFilter">Scheme</label>
+        <select id="schemeFilter"><option value="">All</option></select>
+        <button class="primary" id="applyFilters"><i data-lucide="filter"></i>Apply</button>
+        <button id="resetFilters"><i data-lucide="filter-x"></i>Reset</button>
+    </div>
+    <div id="rangeNote" class="muted" style="padding:0 4px 10px;"></div>
+
+    <div class="cards" id="portfolioCards"></div>
+
+    <h2>Schemes</h2>
+    <div class="table-wrap">
+        <table class="data-table" id="schemeTable">
+            <thead><tr><th>Folio</th><th class="left">Scheme</th><th>ISIN</th><th>Closing Units</th>
+                <th>Units in range</th><th>Records</th><th>NAV Date</th><th>NAV</th>
+                <th>Cost Value (₹)</th><th>Market Value (₹)</th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <h2>Transactions</h2>
+    <div class="table-scroll" id="transactionScroll">
+        <table class="data-table" id="transactionTable">
+            <thead><tr><th>Date</th><th class="left">Scheme</th><th>Type</th><th class="left">Description</th>
+                <th>Units</th><th>NAV</th><th>Amount (₹)</th><th>Balance</th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+    <div id="transactionMore" class="muted" style="text-align:center; padding:6px;"></div>
+    <div class="pagination" id="transactionPager"></div>
+</main>
+<th:block id="scripts" th:fragment="scripts">
+    <script th:src="@{/js/modules/mf-portfolio-detail.js}"></script>
+</th:block>
+</body>
+</html>

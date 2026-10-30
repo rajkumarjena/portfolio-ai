@@ -7,6 +7,9 @@ import com.artech.portfolio.bond.repository.BondRepository;
 import com.artech.portfolio.bond.repository.CashFlowDataRepository;
 import com.artech.portfolio.client.entity.Client;
 import com.artech.portfolio.client.entity.ClientFamilyMember;
+import com.artech.portfolio.mf.repository.MfFolioSchemeTransactionRepository;
+import com.artech.portfolio.mf.repository.MfFolioSchemeValuationRepository;
+import com.artech.portfolio.mf.repository.MfPortfolioSummaryRepository;
 import com.artech.portfolio.summary.dto.BondWidgetView;
 import com.artech.portfolio.summary.dto.WidgetRow;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,6 +52,9 @@ class PortfolioSummaryServiceImplTest {
 
     private BondRepository bondRepository;
     private CashFlowDataRepository cashFlowDataRepository;
+    private MfFolioSchemeTransactionRepository mfTransactionRepository;
+    private MfFolioSchemeValuationRepository mfValuationRepository;
+    private MfPortfolioSummaryRepository mfSummaryRepository;
     private CurrentUserService currentUserService;
     private PortfolioSummaryServiceImpl service;
 
@@ -59,7 +65,11 @@ class PortfolioSummaryServiceImplTest {
         bondRepository = mock(BondRepository.class);
         cashFlowDataRepository = mock(CashFlowDataRepository.class);
         currentUserService = mock(CurrentUserService.class);
+        mfTransactionRepository = mock(MfFolioSchemeTransactionRepository.class);
+        mfValuationRepository = mock(MfFolioSchemeValuationRepository.class);
+        mfSummaryRepository = mock(MfPortfolioSummaryRepository.class);
         service = new PortfolioSummaryServiceImpl(bondRepository, cashFlowDataRepository,
+                mfTransactionRepository, mfValuationRepository, mfSummaryRepository,
                 currentUserService, fixedClock(TODAY));
 
         me = new Client();
@@ -133,7 +143,8 @@ class PortfolioSummaryServiceImplTest {
     void periodEndsFollowTheCalendarQuarterOfTheCurrentDate() {
         // 11 Feb 2026 is a Wednesday: week -> Sun 15 Feb, month -> 28 Feb, quarter -> 31 Mar.
         PortfolioSummaryServiceImpl febService = new PortfolioSummaryServiceImpl(
-                bondRepository, cashFlowDataRepository, currentUserService,
+                bondRepository, cashFlowDataRepository, mfTransactionRepository,
+                mfValuationRepository, mfSummaryRepository, currentUserService,
                 fixedClock(LocalDate.of(2026, 2, 11)));
 
         BondWidgetView view = febService.getBondWidget();

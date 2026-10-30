@@ -6,28 +6,34 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * CAS import + reconciliation business process (MF.md 14-16, 20, 22, 23, 25):
- * upload -> reconcile (validate, dedupe, remap) -> accept into
- * MfHeader / MfTransaction. Nothing is written to the portfolio until accept.
+ * KFINTECH CAS upload flow (MF.md 1-3, 9, 16, 17):
+ * <pre>
+ *   upload (pdf + password) -> parsed into the TEMPORARY table set
+ *   reconciliation report    -> read back from temp against the accepted data
+ *   accept                   -> temp copied into the PERMANENT table set
+ * </pre>
+ * Nothing is written before the pdf has been read successfully, so a failed
+ * upload leaves the last good staging data in the temporary tables (MF.md 9).
  */
 public interface MfImportService {
 
-    /** Parses an uploaded xlsx/csv/pdf statement into a batch of review lines. */
-    Map<String, Object> importFile(String pan, String fileName, byte[] data);
+    /**
+     * Parses the uploaded report and refreshes the temporary table set.
+     *
+     * @param password password of the protected pdf, may be null when the file
+     *                 is not encrypted (MF.md 2/3)
+     */
+    Map<String, Object> importFile(String ownerPan, String fileName, byte[] data, String password);
 
-    List<MfImportBatch> listBatches(String pan);
+    /** Import history of the client (MF.md 17). */
+    List<MfImportBatch> listBatches(String ownerPan);
 
-    /** Batch + lines + validation checks + before/after detail report. */
-    Map<String, Object> getBatch(Long id, String pan);
+    /** The parsed report as JSON, for the high level check (MF.md 16). */
+    String parsedJson(Long batchId, String ownerPan);
 
-    /** Re-runs header/detail level validation (MF.md 15) and colour codes it. */
-    Map<String, Object> validate(Long id, String pan);
+    /** Commits the reviewed temporary tables into the permanent ones (MF.md 12/13). */
+    Map<String, Object> accept(Long batchId, String ownerPan);
 
-    /** Points an unregistered-scheme line at a registered scheme (MF.md 20). */
-    Map<String, Object> remap(Long id, Long lineId, Long schemeId, String pan);
-
-    /** Commits the reviewed lines into the portfolio (MF.md 16). */
-    Map<String, Object> accept(Long id, String pan);
-
-    void discard(Long id, String pan);
+    /** Drops an upload that must not reach the permanent tables (MF.md 17). */
+    void discard(Long batchId, String ownerPan);
 }

@@ -4,7 +4,9 @@ import com.artech.portfolio.auth.service.AuthException;
 import com.artech.portfolio.auth.service.CurrentUserService;
 import com.artech.portfolio.dbquery.dto.DbQueryRequest;
 import com.artech.portfolio.dbquery.dto.DbQueryResult;
+import com.artech.portfolio.dbquery.dto.DbQueryStatementResult;
 import com.artech.portfolio.dbquery.util.DbQueryConstants;
+import com.artech.portfolio.dbquery.util.SqlScript;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,14 +23,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * ADMIN_V1 Database Query service: validates and executes one SQL statement
- * submitted by an ADMIN on the Database Query screen.
+ * ADMIN_V1 Database Query service: validates and executes the SQL submitted by
+ * an ADMIN on the Database Query screen.
  *
  * Development-consideration controls (they do not change the screen's flow):
  *   - authorization: SecurityConfig already requires ROLE_ADMIN for
  *     /api/admin/**, and the service re-checks it before touching the database;
  *   - query validation: category must be selected, SQL must be non-empty and
- *     must start with a statement the selected category allows;
+ *     every statement must start with a keyword the selected category allows;
  *   - execution timeout: every statement runs with a statement timeout;
  *   - maximum result size: DQL returns at most the configured number of rows
  *     (truncated = true tells the screen the result was capped);
@@ -37,6 +39,15 @@ import java.util.List;
  *     transaction into the pool;
  *   - audit logging: every execution - who, what, how long, outcome - is
  *     written to the application log (springboot.log, downloadable by an admin).
+ *
+ * MFR_V13: the text box takes a whole script (many statements separated by ';')
+ * - the admin pastes 14 DELETEs at once. A JDBC Statement runs only the FIRST
+ * statement of such a text, which is why the screen answered "Success - 0
+ * row(s) affected" while the tables kept their data. The script is now split
+ * into its statements ({@link SqlScript}), every one of them is run, and the
+ * screen gets the outcome of each. DML and DDL run inside ONE transaction -
+ * all statements commit together or the first failure rolls the whole script
+ * back and is shown on screen with its position.
  */
 @Service
 public class DbQueryService {
@@ -45,6 +56,9 @@ public class DbQueryService {
 
     /** Audit trail for direct database access (ADMIN_V1 development considerations). */
     private static final Logger audit = LoggerFactory.getLogger("DBQUERY_AUDIT");
+
+    /** SQLite refuses VACUUM inside a transaction, so such a script runs unwrapped. */
+    private static final String VACUUM = "VACUUM";
 
     private final DataSource dataSource;
     private final CurrentUserService currentUserService;
@@ -65,9 +79,10 @@ public class DbQueryService {
     }
 
     /**
-     * ADMIN_V1: validate the input (category selected, query not empty, statement
-     * matches the category), execute it and hand back the result. Successful DQL
-     * carries the complete result set (column names + rows) for the CSV download.
+     * ADMIN_V1: validate the input (category selected, query not empty, every
+     * statement matches the category), execute all of it and hand back the
+     * result. Successful DQL carries the complete result set (column names +
+     * rows) for the CSV download; every category reports what each statement did.
      */
     public DbQueryResult execute(DbQueryRequest request) {
         // Defense in depth: SecurityConfig blocks the endpoint at /api/admin/**,
@@ -78,23 +93,28 @@ public class DbQueryService {
         }
 
         String category = validateCategory(request);
-        String sql = validateSql(request, category);
+        List<SqlScript.Statement> statements = validateSql(request, category);
         String admin = currentUserService.currentPan();
 
         long started = System.currentTimeMillis();
         try {
-            DbQueryResult result = runSql(category, sql);
-            audit.info("admin={} category={} rows={} ms={} outcome=SUCCESS sql={}",
-                    admin, category,
+            DbQueryResult result = runSql(category, statements);
+            audit.info("admin={} category={} statements={} rows={} ms={} outcome=SUCCESS sql={}",
+                    admin, category, statements.size(),
                     result.getRowCount() != null ? result.getRowCount() : result.getRowsAffected(),
-                    System.currentTimeMillis() - started, oneLine(sql));
+                    System.currentTimeMillis() - started, oneLine(request.getSql()));
             return result;
+        } catch (StatementFailure failure) {
+            audit.warn("admin={} category={} statements={} failed_at={} ms={} outcome=ERROR error={} sql={}",
+                    admin, category, statements.size(), failure.statement.index(),
+                    System.currentTimeMillis() - started, failure.getReason(), oneLine(failure.statement.sql()));
+            // The actual database error goes back to the screen so the admin
+            // can correct the query and retry (ADMIN_V1 execution behaviour).
+            throw new AuthException(HttpStatus.BAD_REQUEST, failure.getMessage());
         } catch (SQLException e) {
             audit.warn("admin={} category={} ms={} outcome=ERROR error={} sql={}",
                     admin, category, System.currentTimeMillis() - started,
-                    e.getMessage(), oneLine(sql));
-            // The actual database error goes back to the screen so the admin
-            // can correct the query and retry (ADMIN_V1 execution behaviour).
+                    e.getMessage(), oneLine(request.getSql()));
             throw new AuthException(HttpStatus.BAD_REQUEST,
                     "Query failed: " + (e.getMessage() == null ? e.toString() : e.getMessage()));
         }
@@ -114,96 +134,179 @@ public class DbQueryService {
     }
 
     /**
-     * #2/#3 of the flow: the query must not be empty, and its first statement
-     * must belong to the selected category - e.g. a DELETE is not run under DQL.
+     * #2/#3 of the flow: the script must not be empty, and EVERY statement in
+     * it must belong to the selected category - MFR_V13 validates the whole
+     * pasted script, not just its first line, so a DROP cannot hide behind a
+     * leading DELETE when DML was selected.
      */
-    private String validateSql(DbQueryRequest request, String category) {
-        String sql = request.getSql() == null ? "" : request.getSql().trim();
-        if (sql.isEmpty()) {
+    private List<SqlScript.Statement> validateSql(DbQueryRequest request, String category) {
+        String script = request.getSql() == null ? "" : request.getSql().trim();
+        if (script.isEmpty()) {
             throw new AuthException(HttpStatus.BAD_REQUEST, "Enter a SQL query to execute");
         }
-        if (sql.length() > maxSqlLength) {
+        if (script.length() > maxSqlLength) {
             throw new AuthException(HttpStatus.BAD_REQUEST,
                     "SQL query is too long (maximum " + maxSqlLength + " characters)");
         }
 
-        String keyword = firstKeyword(sql);
-        if (keyword.isEmpty()) {
+        List<SqlScript.Statement> statements = SqlScript.split(script);
+        if (statements.isEmpty()) {
             throw new AuthException(HttpStatus.BAD_REQUEST,
                     "The query contains no SQL statement to execute");
         }
-        String actualCategory = DbQueryConstants.categoryOfStatement(keyword);
-        if (actualCategory == null) {
-            throw new AuthException(HttpStatus.BAD_REQUEST,
-                    "'" + keyword + "' is not a supported statement. Use one of - DQL: "
-                            + DbQueryConstants.allowedStatements(DbQueryConstants.CATEGORY_DQL)
-                            + "; DML: " + DbQueryConstants.allowedStatements(DbQueryConstants.CATEGORY_DML)
-                            + "; DDL: " + DbQueryConstants.allowedStatements(DbQueryConstants.CATEGORY_DDL)
-                            + "; TCL: " + DbQueryConstants.allowedStatements(DbQueryConstants.CATEGORY_TCL));
-        }
-        if (!category.equals(actualCategory)) {
-            throw new AuthException(HttpStatus.BAD_REQUEST,
-                    "'" + keyword + "' belongs to " + actualCategory + ", not to " + category
-                            + ". " + category + " allows: "
-                            + DbQueryConstants.allowedStatements(category)
-                            + " - select the right category or correct the query");
-        }
-        return sql;
-    }
 
-    /** First SQL keyword, skipping leading whitespace and -- / * *...* comments. */
-    private String firstKeyword(String sql) {
-        String rest = sql;
-        while (true) {
-            rest = rest.trim();
-            if (rest.startsWith("--")) {
-                int nl = rest.indexOf('\n');
-                if (nl < 0) return "";
-                rest = rest.substring(nl + 1);
-            } else if (rest.startsWith("/*")) {
-                int end = rest.indexOf("*/");
-                if (end < 0) return "";
-                rest = rest.substring(end + 2);
-            } else {
-                break;
+        for (SqlScript.Statement statement : statements) {
+            String keyword = statement.keyword();
+            String position = statements.size() == 1 ? ""
+                    : "Statement " + statement.index() + " of " + statements.size() + ": ";
+
+            if (keyword.isEmpty()) {
+                throw new AuthException(HttpStatus.BAD_REQUEST, position
+                        + "no SQL statement to execute here - " + statement.preview());
+            }
+            String actualCategory = DbQueryConstants.categoryOfStatement(keyword);
+            if (actualCategory == null) {
+                throw new AuthException(HttpStatus.BAD_REQUEST, position
+                        + "'" + keyword + "' is not a supported statement. Use one of - DQL: "
+                        + DbQueryConstants.allowedStatements(DbQueryConstants.CATEGORY_DQL)
+                        + "; DML: " + DbQueryConstants.allowedStatements(DbQueryConstants.CATEGORY_DML)
+                        + "; DDL: " + DbQueryConstants.allowedStatements(DbQueryConstants.CATEGORY_DDL)
+                        + "; TCL: " + DbQueryConstants.allowedStatements(DbQueryConstants.CATEGORY_TCL));
+            }
+            if (!category.equals(actualCategory)) {
+                throw new AuthException(HttpStatus.BAD_REQUEST, position
+                        + "'" + keyword + "' belongs to " + actualCategory + ", not to " + category
+                        + ". " + category + " allows: " + DbQueryConstants.allowedStatements(category)
+                        + " - select the right category or correct the query");
             }
         }
-        int end = 0;
-        while (end < rest.length() && Character.isLetter(rest.charAt(end))) {
-            end++;
-        }
-        return rest.substring(0, end).toUpperCase();
+        return statements;
     }
 
     // ------------------------------------------------------------ execution
 
-    /** Runs one statement on a short-lived connection and maps it to a result. */
-    private DbQueryResult runSql(String category, String sql) throws SQLException {
+    /** Runs every statement of the script on one connection and maps the outcome. */
+    private DbQueryResult runSql(String category, List<SqlScript.Statement> statements)
+            throws SQLException {
         DbQueryResult result = new DbQueryResult();
         result.setCategory(category);
+        result.setStatementCount(statements.size());
+        List<DbQueryStatementResult> outcomes = new ArrayList<>(statements.size());
+        result.setStatements(outcomes);
+
+        boolean dql = DbQueryConstants.CATEGORY_DQL.equals(category);
+        boolean dml = DbQueryConstants.CATEGORY_DML.equals(category);
+        // MFR_V13: DML / DDL commit together - a failing statement must not leave
+        // half of the admin's script applied. TCL manages the transaction itself.
+        boolean transactional = isTransactional(category, statements);
 
         Connection connection = dataSource.getConnection();
         try {
-            try (Statement statement = connection.createStatement()) {
-                statement.setQueryTimeout(timeoutSeconds);
-                boolean isDql = DbQueryConstants.CATEGORY_DQL.equals(category);
-                if (isDql) {
-                    // One extra row lets us detect a capped result without fetching it.
-                    statement.setMaxRows(maxRows + 1);
-                }
+            if (transactional) {
+                begin(connection);
+            }
 
-                boolean hasResultSet = statement.execute(sql);
-                if (isDql && hasResultSet) {
-                    readResultSet(statement.getResultSet(), result);
-                } else {
-                    result.setRowsAffected(statement.getUpdateCount());
+            boolean anyKnownCount = false;
+            int totalChanged = 0;
+
+            for (SqlScript.Statement statement : statements) {
+                DbQueryStatementResult outcome = new DbQueryStatementResult();
+                outcome.setIndex(statement.index());
+                outcome.setKeyword(statement.keyword());
+                outcome.setStatement(statement.preview());
+
+                try (Statement jdbc = connection.createStatement()) {
+                    jdbc.setQueryTimeout(timeoutSeconds);
+                    if (dql) {
+                        // One extra row lets us detect a capped result without fetching it.
+                        jdbc.setMaxRows(maxRows + 1);
+                    }
+
+                    boolean hasResultSet = jdbc.execute(statement.sql());
+                    if (dql && hasResultSet) {
+                        try (ResultSet rs = jdbc.getResultSet()) {
+                            if (result.getColumns() == null) {
+                                readResultSet(rs, result);
+                            }
+                            // A script with several SELECTs still downloads ONE CSV:
+                            // the first result set is the one sent to the screen.
+                        }
+                    } else if (dml) {
+                        // Only DML has a meaningful "rows changed" count; the driver
+                        // reports a stale number for CREATE / DROP / BEGIN, which
+                        // would read as data having been touched.
+                        int changed = jdbc.getUpdateCount();
+                        if (changed >= 0) {
+                            outcome.setRowsAffected(changed);
+                            anyKnownCount = true;
+                            totalChanged += changed;
+                        }
+                    }
+                } catch (SQLException e) {
+                    rollback(connection, transactional);
+                    throw new StatementFailure(statement, statements.size(), transactional, e);
                 }
+                outcomes.add(outcome);
+            }
+
+            if (transactional) {
+                commit(connection);
+            }
+            if (DbQueryConstants.CATEGORY_DML.equals(category)) {
+                // null when no statement reported a count, so the screen never
+                // claims "0 row(s) affected" for a count the driver did not give.
+                result.setRowsAffected(anyKnownCount ? totalChanged : null);
             }
             return result;
         } finally {
             // Transaction handling: clean BEFORE the connection goes back to the
             // pool, so a TCL BEGIN can never leak an open transaction into it.
             release(connection);
+        }
+    }
+
+    /**
+     * DML and DDL run as one transaction. SQLite refuses VACUUM inside a
+     * transaction, so a DDL script that reaches for it runs statement by
+     * statement in auto-commit instead of failing.
+     */
+    private boolean isTransactional(String category, List<SqlScript.Statement> statements) {
+        if (DbQueryConstants.CATEGORY_DML.equals(category)) {
+            return true;
+        }
+        if (!DbQueryConstants.CATEGORY_DDL.equals(category)) {
+            return false;
+        }
+        return statements.stream().noneMatch(s -> VACUUM.equals(s.keyword()));
+    }
+
+    /**
+     * MFR_V13: the transaction is opened with an explicit SQL BEGIN rather than
+     * Connection.setAutoCommit(false). The JDBC pool hands out a proxy whose
+     * auto-commit switch does not open a SQLite transaction - a rollback then
+     * fails with "cannot rollback - no transaction is active" while the DELETEs
+     * stay committed. BEGIN / COMMIT / ROLLBACK as SQL are unambiguous.
+     */
+    private void begin(Connection connection) throws SQLException {
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("BEGIN");
+        }
+    }
+
+    private void commit(Connection connection) throws SQLException {
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("COMMIT");
+        }
+    }
+
+    private void rollback(Connection connection, boolean transactional) {
+        if (!transactional) {
+            return;
+        }
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("ROLLBACK");
+        } catch (SQLException e) {
+            log.debug("Could not roll the script back: {}", e.getMessage());
         }
     }
 
@@ -267,7 +370,41 @@ public class DbQueryService {
 
     /** One log-friendly line of the SQL (no multi-line spam in the audit trail). */
     private String oneLine(String sql) {
-        String flat = sql.replaceAll("\\s+", " ").trim();
+        String flat = sql == null ? "" : sql.replaceAll("\\s+", " ").trim();
         return flat.length() > 300 ? flat.substring(0, 300) + "..." : flat;
+    }
+
+    /**
+     * MFR_V13: a statement failed - carries which one, so the screen shows
+     * "statement 5 of 14 ... near ..." and the admin can see exactly where the
+     * script stopped and that nothing was half-applied.
+     */
+    private static final class StatementFailure extends RuntimeException {
+
+        private final transient SqlScript.Statement statement;
+        private final String reason;
+
+        private StatementFailure(SqlScript.Statement statement, int total,
+                                 boolean transactional, SQLException cause) {
+            super(buildMessage(statement, total, transactional, cause));
+            this.statement = statement;
+            this.reason = cause.getMessage() == null ? cause.toString() : cause.getMessage();
+        }
+
+        private String getReason() {
+            return reason;
+        }
+
+        private static String buildMessage(SqlScript.Statement statement, int total,
+                                           boolean transactional, SQLException cause) {
+            String where = total == 1
+                    ? "Query failed"
+                    : "Query failed at statement " + statement.index() + " of " + total
+                    + " (" + statement.preview() + ") - "
+                    + (transactional
+                        ? "the whole script was rolled back, nothing was applied"
+                        : "the earlier statements were already applied");
+            return where + ": " + (cause.getMessage() == null ? cause.toString() : cause.getMessage());
+        }
     }
 }

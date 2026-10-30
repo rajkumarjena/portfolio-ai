@@ -1,9 +1,10 @@
-// mf-import-view-script.js - reconciliation report: color codes, remap, accept
-// (MF.md 15, 16, 20, 22, 23, 25)
-let current = null;          // {batch, lines, checks, detail}
-let registeredSchemes = []; // for the remap dialog
-let remapLineId = null;
-
+// mf-import-view.js - the five reconciliation reports of MF.md 12 and the
+// accept / discard actions (MF.md 13).
+//
+// MF_V2 2/3/4: the long reports carry a filter bar (date / folio # / scheme /
+// AMC) and are drawn in windows of 100 rows - the next window is appended when
+// the bottom of the table scrolls into view - so a report with thousands of
+// rows never puts thousands of <tr> on the page.
 function esc(s) {
     var A = String.fromCharCode(38);
     return String(s == null ? '' : s)
@@ -12,15 +13,6 @@ function esc(s) {
         .replace(/>/g, A + 'gt;')
         .replace(/"/g, A + 'quot;')
         .replace(/'/g, A + '#39;');
-}
-
-function money(v) {
-    return (Number(v) || 0).toLocaleString('en-IN',
-        {minimumFractionDigits: 2, maximumFractionDigits: 2});
-}
-
-function num(v) {
-    return (Number(v) || 0).toLocaleString('en-IN', {maximumFractionDigits: 4});
 }
 
 async function getJson(url, init) {
@@ -34,289 +26,448 @@ async function getJson(url, init) {
     return body;
 }
 
-const STATUS_LABEL = {
-    NEW: 'NEW', EXISTS: 'DUPLICATE', NEW_SCHEME: 'NEW SCHEME',
-    MAPPED: 'REMAPPED', ERROR: 'ERROR', SKIPPED: 'EMPTY ROW'
+// Columns of each report of MF.md 12, so the screen stays generic when a row
+// carries more detail than the previous report did.
+const REPORT_COLUMNS = {
+    1: [['scheme', 'Scheme', 'left'], ['date', 'Date'], ['description', 'Description', 'left'],
+        ['amount', 'Amount'], ['units', 'Units'], ['type', 'Type']],
+    2: [['amc', 'AMC', 'left'], ['summaryCost', 'Summary cost'], ['transactionCost', 'Transactions cost'],
+        ['costDifference', 'Cost difference'], ['summaryMarket', 'Summary market'],
+        ['valuationMarket', 'Valuation market'], ['marketDifference', 'Market difference'],
+        ['costOk', 'Cost'], ['marketOk', 'Market']],
+    3: [['scheme', 'Scheme', 'left'], ['previous', 'Previous adjusted'], ['current', 'New adjusted'],
+        ['difference', 'Difference'], ['reason', 'Reason', 'left']],
+    4: [['where', 'Where', 'left'], ['date', 'Date'], ['scheme', 'Scheme', 'left'],
+        ['description', 'Description', 'left'], ['amount', 'Amount'], ['units', 'Units'],
+        ['type', 'Type'], ['reason', 'Reason', 'left']],
+    5: [['check', 'Check', 'left'], ['against', 'Compared with', 'left'], ['expected', 'Expected'],
+        ['actual', 'Actual'], ['difference', 'Difference'], ['tolerancePercent', 'Tolerance %'],
+        ['ok', 'Within tolerance']]
 };
 
-// ---------------------------------------------------------------- banner
-function renderBanner() {
-    const b = current.batch;
-    const d = current.detail;
-    const counts = d.counts || {};
-    const cls = ['GREEN', 'AMBER', 'RED'].includes(b.validStatus) ? b.validStatus : 'PENDING';
-    const titles = {
-        GREEN: 'GREEN - good match, ready to accept',
-        AMBER: 'AMBER - needs your attention before accepting',
-        RED: 'RED - totals or rows do not match, review required',
-        PENDING: 'PENDING - not validated yet'
-    };
-    document.getElementById('statusBanner').className = 'status-banner banner-' + cls;
-    const stmt = b.clientName && b.reportPan
-        ? `${esc(b.clientName)} (${esc(b.reportPan)})`
-        : b.reportPan ? `statement PAN ${esc(b.reportPan)}`
-        : b.clientName ? esc(b.clientName) : '';
-    document.getElementById('statusBanner').innerHTML =
-        `<span>${titles[cls]}</span>` +
-        `<span class="sub">` +
-        `new ${counts.NEW || 0} · duplicate ${counts.EXISTS || 0} · ` +
-        `unregistered scheme ${counts.NEW_SCHEME || 0} · remapped ${counts.MAPPED || 0} · ` +
-        `empty ${counts.SKIPPED || 0} · errors ${counts.ERROR || 0}` +
-        (stmt ? ` · statement: ${stmt}` : '') +
-        `</span>`;
+// MF_V2 2/4 - which reports carry a filter bar, and which row field each
+// control narrows. "folio" and "schemeName" are cut out of the report's own
+// scheme key ("910160157382 | Axis Small Cap Fund ..."); "amc" is delivered by
+// the report itself; "date" is the transaction date of the report.
+const REPORT_FILTERS = {
+    1: [['dateFrom', 'Date from', 'date'], ['dateTo', 'Date to', 'date'],
+        ['folio', 'Folio #', 'select'], ['schemeName', 'Scheme', 'select'],
+        ['amc', 'AMC', 'select']],
+    3: [['folio', 'Folio #', 'select'], ['schemeName', 'Scheme', 'select'],
+        ['amc', 'AMC', 'select']],
+    // MF_V3 7 - the missing / out of sequence rows get the same filter bar
+    4: [['dateFrom', 'Date from', 'date'], ['dateTo', 'Date to', 'date'],
+        ['folio', 'Folio #', 'select'], ['schemeName', 'Scheme', 'select'],
+        ['amc', 'AMC', 'select']]
+};
 
-    const uploaded = b.status === 'UPLOADED';
-    document.getElementById('acceptBtn').style.display = uploaded ? '' : 'none';
-    document.getElementById('discardBtn').style.display = uploaded ? '' : 'none';
-    if (!uploaded) {
-        document.getElementById('statusBanner').innerHTML +=
-            `<span class="sub">Batch ${esc(b.status)}` +
-            `${b.acceptedAt ? ' on ' + esc(String(b.acceptedAt).replace('T', ' ').slice(0, 16)) : ''}</span>`;
-    }
+// MF_V2 3 - rows drawn per window; scrolling past the last drawn row appends
+// the next window.
+const PAGE_SIZE = 50;
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+const STATUS_TEXT = {
+    GREEN: 'All five reports are green - the upload agrees with the accepted data.',
+    AMBER: 'Highlighted differences need your review before accepting.',
+    RED: 'Differences were found - review the red rows before accepting.'
+};
+
+let batches = [];
+let currentId = null;
+/** report id -> the windowed table of that report (rows, filters, window). */
+const views = {};
+
+// ------------------------------------------------------------------- load
+function loadBatches() {
+    return getJson('/api/mf/import/batches').then(list => {
+        batches = list || [];
+        const select = document.getElementById('batchSelect');
+        select.innerHTML = batches.map(b =>
+            `<option value="${b.id}">#${b.id} ${esc(b.fileName)}</option>`).join('')
+            || '<option value="">No imports yet</option>';
+        const wanted = new URLSearchParams(location.search).get('id');
+        const pick = wanted && batches.some(b => String(b.id) === wanted)
+            ? wanted
+            : (batches[0] ? String(batches[0].id) : '');
+        if (pick) {
+            select.value = pick;
+            currentId = pick;
+            return reconcile();
+        }
+        document.getElementById('statusBanner').className = 'status-banner banner-PENDING';
+        document.getElementById('statusBanner').textContent =
+            'No import selected - upload a KFINTECH report first.';
+        document.getElementById('reports').innerHTML = '';
+        document.getElementById('batchCards').innerHTML = '';
+        document.getElementById('emptyNote').style.display = 'block';
+    }).catch(err => banner('RED', err.message));
 }
 
-// --------------------------------------------------------- detail report
-function renderDetailCards() {
-    const d = current.detail;
-    const sys = d.system, rep = d.report, pro = d.projected;
-    const delta = (pro.current - sys.current);
-    document.getElementById('detailCards').innerHTML = `
-        <div class="card">
-            <div class="label">System now - value (₹)</div>
-            <div class="value">${money(sys.current)}</div>
-            <div class="muted">${sys.headers} holdings · ${sys.transactions} txns<br>
-                invested ${money(sys.invested)} · profit ${money(sys.profit)}<br>
-                units ${num(sys.units)}</div>
-        </div>
-        <div class="card blue">
-            <div class="label">Imported report</div>
-            <div class="value">${money(rep.parsedCurrent)}</div>
-            <div class="muted">${esc(rep.fileName)} (${esc(rep.fileType)})<br>
-                period ${esc(rep.from || '?')} → ${esc(rep.to || '?')}<br>
-                report header: inv ${money(rep.invested)} · cur ${money(rep.current)}<br>
-                rows: ${rep.holdings} holdings, ${rep.transactions} txns<br>
-                units ${num(rep.parsedUnits)}</div>
-        </div>
-        <div class="card ${delta >= 0 ? 'green' : 'red'}">
-            <div class="label">After accept - total value (₹)</div>
-            <div class="value">${money(pro.current)}</div>
-            <div class="muted">${pro.headers} holdings · ${pro.transactions} txns<br>
-                invested ${money(pro.invested)} · profit ${money(pro.profit)}<br>
-                units ${num(pro.units)}<br>
-                change vs now: ${delta >= 0 ? '+' : ''}${money(delta)}</div>
-        </div>
-        <div class="card amber">
-            <div class="label">Reconciliation impact</div>
-            <div class="value">${pro.duplicateRowsSkipped || 0}</div>
-            <div class="muted">duplicate rows skipped (no double entry)<br>
-                +${pro.refreshedHeaders || 0} holdings refreshed<br>
-                +${((current.detail.counts.NEW || 0) > 0 ? pro.headers - sys.headers : 0)} new holdings<br>
-                ${pro.schemesToRegister || 0} schemes would be registered</div>
+// ------------------------------------------------------------ the reports
+function reconcile() {
+    const select = document.getElementById('batchSelect');
+    if (!select.value) { banner('PENDING', 'No import selected.'); return; }
+    currentId = select.value;
+    document.getElementById('statusBanner').textContent = 'Reading the reconciliation report...';
+    return getJson('/api/mf/import/batches/' + currentId + '/report')
+        .then(render)
+        .catch(err => banner('RED', err.message));
+}
+
+function render(data) {
+    const batch = data.batch || {};
+    const counts = data.counts || {};
+    // MF_V3 2 - does the accepted data already span this upload?
+    const coverage = data.coverage || {};
+    document.getElementById('emptyNote').style.display = 'none';
+
+    banner(data.status,
+        'Reconciliation ' + esc(data.status) + ' - ' + (STATUS_TEXT[data.status] || ''),
+        (coverage.covered && coverage.note ? esc(coverage.note) + '<br>' : '')
+            + ['newTransactions: ' + counts.newTransactions,
+            'adjusted changes: ' + counts.adjustedChanges,
+            'missing: ' + counts.missingTransactions,
+            'AMC mismatches: ' + counts.amcMismatches,
+            'failed checks: ' + counts.failedChecks].join(' &nbsp;|&nbsp; '));
+
+    const tol = data.tolerance || {};
+    document.getElementById('batchCards').innerHTML = [
+        card('Import', '#' + batch.id + ' ' + esc(batch.fileName || '')),
+        card('Status', esc(batch.status)),
+        // MF_V2 1 - the period exactly the way the statement prints it
+        card('Period', esc(periodOf(batch))),
+        // MF_V3 2 - whether the accepted data already spans this upload
+        card('Coverage', coverage.covered ? 'covered by the accepted data'
+            : (data.hasAcceptedData ? 'extends the accepted data' : 'nothing accepted yet')),
+        card('Client', esc(batch.clientName || '')),
+        card('Folios', batch.folioCount),
+        card('Schemes', batch.schemeCount),
+        card('Transactions', batch.txnCount),
+        card('ADJUSTED rows', batch.adjustedCount),
+        card('Tolerance (units / cost / market %)',
+            esc([tol.unitsPercent, tol.costPercent, tol.marketPercent].join(' / '))),
+        card('Accepted data', data.hasAcceptedData ? 'present' : 'none - first import')
+    ].join('');
+
+    const host = document.getElementById('reports');
+    closeViews();
+    host.innerHTML = '';
+    (data.reports || []).forEach(report => host.appendChild(sectionFor(report)));
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons();
+    }
+
+    const accept = document.getElementById('acceptBtn');
+    accept.disabled = batch.status === 'ACCEPTED';
+    accept.textContent = batch.status === 'ACCEPTED' ? 'Already accepted' : 'Accept into Portfolio';
+}
+
+/** Builds one report section: header, filter bar, table and scroll sentinel. */
+function sectionFor(report) {
+    const columns = REPORT_COLUMNS[report.id] || [];
+    const rows = report.rows || [];
+    const head = columns.map(c => `<th class="${c[2] || ''}">${esc(c[1])}</th>`).join('');
+    const holder = document.createElement('div');
+    holder.innerHTML = `<section class="filter-section" style="display:block;">
+            <h3 style="margin-bottom:6px;">
+                <span class="badge badge-${esc(report.status)}">${esc(String(report.id))}</span>
+                ${esc(report.name)}
+                <span class="badge badge-${esc(report.status)}" style="margin-left:8px;">${esc(report.status)}</span>
+            </h3>
+            <div class="muted" style="margin-bottom:8px;">${esc(report.note || '')}</div>
+            ${filterBar(report, rows)}
+            <div class="muted" id="range-${report.id}" style="margin-bottom:6px;"></div>
+            <div class="mf-report-scroll" id="scroll-${report.id}" style="max-height:65vh; overflow-y:auto;">
+                <table class="data-table">
+                    <thead><tr>${head}</tr></thead>
+                    <tbody id="rows-${report.id}"></tbody>
+                </table>
+                <div class="muted" id="more-${report.id}" style="display:none; text-align:center; padding:6px;"></div>
+            </div>
+        </section>`;
+    const section = holder.firstElementChild;
+    mount(section, report, columns, rows);
+    return section;
+}
+
+/** The filter controls of reports 1 and 3 (MF_V2 2/4). */
+function filterBar(report, rows) {
+    const defs = REPORT_FILTERS[report.id];
+    if (!defs || !rows.length) {
+        return '';
+    }
+    const controls = defs.map(([field, label, kind]) => {
+        const id = 'f' + report.id + '-' + field;
+        return kind === 'date'
+            ? `<label for="${id}">${esc(label)}</label>` +
+              `<input type="date" id="${id}" data-filter="${field}">`
+            : `<label for="${id}">${esc(label)}</label>` +
+              `<select id="${id}" data-filter="${field}"><option value="">All</option></select>`;
+    }).join('');
+    return `<div class="filter-section" style="margin:0 0 8px;">
+            ${controls}
+            <button class="secondary" onclick="resetFilters(${report.id})">
+                <i data-lucide="filter-x"></i>Reset</button>
         </div>`;
 }
 
-// ---------------------------------------------------------------- checks
-function renderChecks() {
-    const rows = (current.checks || []).map(c => `
-        <tr>
-            <td>${esc(c.name)}</td>
-            <td><span class="badge badge-${esc(c.severity)}">${esc(c.severity)}</span></td>
-            <td>${esc(c.expected)}</td>
-            <td>${esc(c.actual)}</td>
-            <td class="left">${esc(c.message)}</td>
-        </tr>`).join('');
-    document.querySelector('#checkTable tbody').innerHTML = rows ||
-        '<tr><td colspan="5" class="muted">No checks yet - press Re-validate</td></tr>';
-}
+function mount(section, report, columns, rows) {
+    const view = {
+        id: report.id,
+        section: section,
+        columns: columns,
+        note: report.note || '',
+        all: rows,
+        filtered: rows,
+        drawn: 0,
+        body: section.querySelector('#rows-' + report.id),
+        more: section.querySelector('#more-' + report.id),
+        scroll: section.querySelector('#scroll-' + report.id),
+        range: section.querySelector('#range-' + report.id),
+        observer: null
+    };
+    views[report.id] = view;
 
-// ------------------------------------------------------------------ rows
-function renderLines() {
-    const status = document.getElementById('statusFilter').value;
-    const type = document.getElementById('typeFilter').value;
-    const q = document.getElementById('lineSearch').value.trim().toLowerCase();
-
-    const all = current.lines || [];
-    let rows = all;
-    if (status) rows = rows.filter(l => l.status === status);
-    if (type) rows = rows.filter(l => l.lineType === type);
-    if (q) {
-        rows = rows.filter(l => [l.schemeName, l.amcName, l.folioNo, l.description, l.category]
-            .some(v => v && String(v).toLowerCase().includes(q)));
-    }
-
-    const counts = current.detail.counts || {};
-    document.getElementById('rowCounts').textContent =
-        `showing ${rows.length} of ${all.length} rows`;
-
-    document.querySelector('#lineTable tbody').innerHTML = rows.map(l => {
-        const isHold = l.lineType === 'HOLDING';
-        const st = l.status || '?';
-        const action = (st === 'NEW_SCHEME' && current.batch.status === 'UPLOADED')
-            ? `<button class="small" onclick="openRemap(${l.id})"><i data-lucide="shuffle"></i>Remap</button>`
-            : '';
-        return `<tr class="row-${esc(st)}">
-            <td>${l.lineNo}</td>
-            <td>${isHold ? 'Holding' : 'Transaction'}</td>
-            <td class="left">${esc(l.schemeName)}</td>
-            <td>${esc(l.amcName)}</td>
-            <td>${esc(l.folioNo)}</td>
-            <td>${esc(l.txnDate || '')}</td>
-            <td class="left">${esc(l.description || '')}</td>
-            <td class="amt">${l.units ? num(l.units) : ''}</td>
-            <td class="amt">${l.nav ? money(l.nav) : ''}</td>
-            <td class="amt">${isHold ? '' : money(l.amount)}</td>
-            <td class="amt">${isHold ? money(l.investedValue) : ''}</td>
-            <td class="amt">${isHold ? money(l.currentValue) : ''}</td>
-            <td><span class="badge badge-${st === 'NEW_SCHEME' ? 'AMBER' :
-                    st === 'ERROR' ? 'FAIL' : st === 'NEW' ? 'PASS' : st === 'MAPPED' ? 'INFO' : 'PENDING'}">
-                    ${esc(STATUS_LABEL[st] || st)}</span></td>
-            <td class="left">${esc(l.message || '')} ${action}</td>
-        </tr>`;
-    }).join('');
-    window.App && App.renderIcons();
-    document.getElementById('emptyNote').style.display = rows.length ? 'none' : 'block';
-}
-
-function renderAll() {
-    renderBanner();
-    renderDetailCards();
-    renderChecks();
-    renderLines();
-    document.getElementById('batchSelect').value = String(current.batch.id);
-}
-
-// ----------------------------------------------------------------- load
-function loadBatch(id) {
-    return getJson('/api/mf/import/batches/' + id).then(data => {
-        current = data;
-        renderAll();
-        if (history.replaceState) {
-            history.replaceState(null, '', '/mutualfunds/mf-import-view.html?id=' + id);
-        }
-    }).catch(err => alert('Error loading batch: ' + err.message));
-}
-
-function loadBatchList(selectedId) {
-    return getJson('/api/mf/import/batches').then(batches => {
-        const sel = document.getElementById('batchSelect');
-        sel.innerHTML = '';
-        if (!batches.length) {
-            sel.innerHTML = '<option value="">No imports yet</option>';
-            return null;
-        }
-        batches.forEach(b => {
-            const o = document.createElement('option');
-            o.value = b.id;
-            o.textContent = `#${b.id} ${b.fileName} (${b.status}/${b.validStatus})`;
-            sel.appendChild(o);
+    const defs = REPORT_FILTERS[report.id];
+    if (defs) {
+        defs.forEach(([field, , kind]) => {
+            if (kind !== 'select') return;
+            const select = section.querySelector('#f' + report.id + '-' + field);
+            fillSelect(select, distinct(rows, field));
         });
-        let pick = selectedId && batches.find(b => String(b.id) === String(selectedId));
-        if (!pick) pick = batches.find(b => b.status === 'UPLOADED') || batches[0];
-        return pick.id;
-    });
+        section.querySelectorAll('[data-filter]').forEach(el =>
+            el.addEventListener('change', () => refilter(view)));
+    }
+    redraw(view);
+    observe(view);
+    watchScroll(view);
 }
 
-function loadSchemes() {
-    return getJson('/api/mf/schemes').then(list => {
-        registeredSchemes = list || [];
-        const sel = document.getElementById('remapScheme');
-        sel.innerHTML = registeredSchemes.map(s =>
-            `<option value="${s.id}">${esc(s.schemeName)} - ${esc(s.amcName)}</option>`).join('');
-    });
+function fillSelect(select, values) {
+    if (!select) return;
+    select.innerHTML = '<option value="">All</option>'
+        + values.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
 }
 
-// ---------------------------------------------------------------- actions
-function revalidate() {
-    if (!current) return;
-    if (current.batch.status !== 'UPLOADED') {
-        alert('An accepted batch cannot be re-validated');
+/** Distinct, naturally sorted values of a filter field over the report rows. */
+function distinct(rows, field) {
+    const values = new Set();
+    for (const row of rows) {
+        const value = filterValue(row, field);
+        if (value) values.add(value);
+    }
+    return [...values].sort((a, b) => String(a).localeCompare(String(b), undefined, {numeric: true}));
+}
+
+function filterValue(row, field) {
+    if (field === 'amc') return String(row.amc || '');
+    const parts = splitScheme(row.scheme);
+    return field === 'folio' ? parts[0] : parts[1];
+}
+
+// The statement prints the folio number and the scheme name in one column
+// ("910160157382 | Axis Small Cap Fund Direct Growth (Non Demat)") - the
+// filters treat them as two fields (MF_V2 2).
+function splitScheme(key) {
+    const text = String(key == null ? '' : key);
+    const cut = text.indexOf(' | ');
+    return cut < 0 ? ['', text] : [text.slice(0, cut), text.slice(cut + 3)];
+}
+
+function refilter(view) {
+    const chosen = {};
+    view.section.querySelectorAll('[data-filter]').forEach(el => {
+        if (el.value) chosen[el.dataset.filter] = el.value;
+    });
+    view.filtered = view.all.filter(row => matches(row, chosen));
+    redraw(view);
+}
+
+function matches(row, chosen) {
+    if (chosen.amc && filterValue(row, 'amc') !== chosen.amc) return false;
+    if (chosen.folio && filterValue(row, 'folio') !== chosen.folio) return false;
+    if (chosen.schemeName && filterValue(row, 'schemeName') !== chosen.schemeName) return false;
+    if (chosen.dateFrom && (!row.date || row.date < chosen.dateFrom)) return false;
+    if (chosen.dateTo && (!row.date || row.date > chosen.dateTo)) return false;
+    return true;
+}
+
+function resetFilters(id) {
+    const view = views[id];
+    if (!view) return;
+    view.section.querySelectorAll('[data-filter]').forEach(el => { el.value = ''; });
+    refilter(view);
+}
+
+/** Back to the first window of the (re)filtered rows. */
+function redraw(view) {
+    view.drawn = 0;
+    view.body.innerHTML = '';
+    appendWindow(view);
+}
+
+/** Draws the next window of rows and refreshes the counter / sentinel. */
+function appendWindow(view) {
+    const total = view.filtered.length;
+    if (!total) {
+        view.body.innerHTML = `<tr><td colspan="${view.columns.length || 1}" class="muted">`
+            + esc(view.all.length ? 'No row matches the selected filters.' : view.note || 'Nothing to show')
+            + '</td></tr>';
+    } else {
+        const end = Math.min(view.drawn + PAGE_SIZE, total);
+        let html = '';
+        for (let i = view.drawn; i < end; i++) {
+            html += rowHtml(view.filtered[i], view.columns);
+        }
+        view.body.insertAdjacentHTML('beforeend', html);
+        view.drawn = end;
+    }
+    updateRange(view);
+    updateSentinel(view);
+}
+
+function rowHtml(row, columns) {
+    return `<tr class="tone-${esc(row.tone || 'grey')}">`
+        + columns.map(c => `<td class="${c[2] || ''}">${fmt(row[c[0]])}</td>`).join('')
+        + '</tr>';
+}
+
+function updateRange(view) {
+    const all = view.all.length;
+    const total = view.filtered.length;
+    if (!all) {
+        view.range.textContent = '';
+    } else if (total === all) {
+        view.range.textContent = total > PAGE_SIZE
+            ? `Showing ${view.drawn} of ${total} rows` : '';
+    } else {
+        view.range.textContent =
+            `${total} of ${all} rows match the filters - showing ${view.drawn}`;
+    }
+}
+
+function updateSentinel(view) {
+    const total = view.filtered.length;
+    const windowed = view.all.length > PAGE_SIZE;
+    if (view.drawn < total) {
+        view.more.style.display = 'block';
+        view.more.textContent =
+            `Showing ${view.drawn} of ${total} - scroll down to load the next ${PAGE_SIZE}`;
+    } else {
+        view.more.style.display = windowed ? 'block' : 'none';
+        view.more.textContent = windowed ? `End of the report - ${total} row(s) shown` : '';
+    }
+}
+
+// A jump that flies past the sentinel (End key, scroll-bar drag) raises no
+// intersection event, so the scroll position is checked as well - cheap, and
+// it can only append while rows are left to draw.
+function watchScroll(view) {
+    if (!('IntersectionObserver' in window)) return; // the click fallback below covers it
+    let ticking = false;
+    view.onScroll = () => {
+        if (ticking || view.drawn >= view.filtered.length) return;
+        ticking = true;
+        requestAnimationFrame(() => {
+            ticking = false;
+            const sentinel = view.more.getBoundingClientRect();
+            const container = view.scroll.getBoundingClientRect();
+            if (sentinel.top < container.bottom + 300) appendWindow(view);
+        });
+    };
+    view.scroll.addEventListener('scroll', view.onScroll, {passive: true});
+}
+
+// MF_V2 3 - the next 100 rows are fetched from memory only when the sentinel
+// under the table comes into view, so the page never holds the whole report.
+function observe(view) {
+    if (!('IntersectionObserver' in window)) {
+        view.more.style.cursor = 'pointer';
+        view.more.onclick = () => appendWindow(view);
         return;
     }
-    getJson('/api/mf/import/batches/' + current.batch.id + '/validate', {method: 'POST'})
-        .then(data => { current = data; renderAll(); })
-        .catch(err => alert('Validation failed: ' + err.message));
+    view.observer = new IntersectionObserver(entries => {
+        for (const entry of entries) {
+            if (entry.isIntersecting && view.drawn < view.filtered.length) {
+                appendWindow(view);
+            }
+        }
+    }, {root: view.scroll, rootMargin: '300px'});
+    view.observer.observe(view.more);
 }
 
-function acceptBatch() {
-    if (!current) return;
-    const d = current.detail;
-    const counts = d.counts || {};
-    const msg = 'Accept this reconciliation into your portfolio?\n\n' +
-        `new rows: ${counts.NEW || 0}\n` +
-        `duplicates skipped: ${counts.EXISTS || 0}\n` +
-        `unregistered schemes to register: ${counts.NEW_SCHEME || 0}\n` +
-        `empty rows ignored: ${counts.SKIPPED || 0}\n` +
-        `errors skipped: ${counts.ERROR || 0}\n\n` +
-        `After accept: total value ₹${money(d.projected.current)}, ` +
-        `units ${num(d.projected.units)}, profit ₹${money(d.projected.profit)}`;
-    if (!confirm(msg)) return;
+function closeViews() {
+    Object.values(views).forEach(view => {
+        if (view.observer) view.observer.disconnect();
+        if (view.onScroll) view.scroll.removeEventListener('scroll', view.onScroll);
+    });
+    Object.keys(views).forEach(key => delete views[key]);
+}
 
-    getJson('/api/mf/import/batches/' + current.batch.id + '/accept', {method: 'POST'})
-        .then(r => {
-            alert('Accepted!\n' +
-                `holdings written: ${r.createdHeaders + r.updatedHeaders} ` +
-                `(${r.createdHeaders} new, ${r.updatedHeaders} refreshed)\n` +
-                `transactions imported: ${r.createdTransactions}\n` +
-                `duplicates skipped: ${r.skippedDuplicates}\n` +
-                `schemes registered: ${r.registeredSchemes}`);
-            window.location.href = '/mutualfunds/mf-portfolio.html';
+function card(label, value) {
+    return `<div class="card"><div class="label">${esc(label)}</div><div class="value">${value}</div></div>`;
+}
+
+// MF_V2 1 - the period is stored as a date, but the statement prints
+// "25-Jan-2007 to 25-Oct-2026"; show it exactly the way the pdf does.
+function printedDate(iso) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+    return m ? m[3] + '-' + MONTHS[Number(m[2]) - 1] + '-' + m[1] : (iso ? String(iso) : '?');
+}
+
+function periodOf(batch) {
+    return printedDate(batch.reportFrom) + ' to ' + printedDate(batch.reportTo);
+}
+
+function fmt(value) {
+    if (value === null || value === undefined) return '';
+    if (typeof value === 'boolean') {
+        return value ? '<span class="badge badge-GREEN">yes</span>'
+            : '<span class="badge badge-RED">no</span>';
+    }
+    if (typeof value === 'number') {
+        return Number.isInteger(value) ? value.toLocaleString('en-IN')
+            : value.toLocaleString('en-IN', {maximumFractionDigits: 4});
+    }
+    if (typeof value === 'object') return esc(JSON.stringify(value));
+    return esc(value);
+}
+
+function banner(status, text, sub) {
+    const node = document.getElementById('statusBanner');
+    const cls = ['GREEN', 'AMBER', 'RED', 'PENDING'].includes(status) ? status : 'PENDING';
+    node.className = 'status-banner banner-' + cls;
+    node.innerHTML = esc(text) + (sub ? `<span class="sub">${sub}</span>` : '');
+}
+
+// --------------------------------------------------------------- actions
+function acceptBatch() {
+    if (!currentId) return;
+    const confirmed = confirm('Accept this reconciliation? The temporary tables are copied '
+        + 'into your portfolio and become the data the next upload is compared with (MF.md 13).');
+    if (!confirmed) return;
+    getJson('/api/mf/import/batches/' + currentId + '/accept', {method: 'POST'})
+        .then(() => {
+            banner('GREEN', 'Import accepted into your portfolio.');
+            return loadBatches();
         })
-        .catch(err => alert('Accept failed: ' + err.message));
+        .catch(err => banner('RED', err.message));
 }
 
 function discardBatch() {
-    if (!current) return;
-    if (!confirm('Discard this batch? Nothing was written to the portfolio.')) return;
-    getJson('/api/mf/import/batches/' + current.batch.id, {method: 'DELETE'})
-        .then(() => window.location.href = '/mutualfunds/mf-import.html')
-        .catch(err => alert('Error: ' + err.message));
+    if (!currentId) return;
+    if (!confirm('Discard this upload? The temporary tables are emptied; accepted data is untouched.')) return;
+    getJson('/api/mf/import/batches/' + currentId, {method: 'DELETE'})
+        .then(() => loadBatches())
+        .catch(err => banner('RED', err.message));
 }
 
-// ----------------------------------------------------------------- remap
-function openRemap(lineId) {
-    const line = (current.lines || []).find(l => l.id === lineId);
-    if (!line) return;
-    remapLineId = lineId;
-    document.getElementById('remapInfo').innerHTML =
-        `Statement row: <b>${esc(line.schemeName)}</b>` +
-        (line.amcName ? ` (${esc(line.amcName)})` : '') +
-        (line.folioNo ? ` - folio ${esc(line.folioNo)}` : '') +
-        (line.txnDate ? ` - ${esc(line.txnDate)}` : '');
-    document.getElementById('remapModal').classList.add('open');
+function downloadJson() {
+    if (currentId) window.location.href = '/api/mf/import/batches/' + currentId + '/json';
 }
 
-function closeRemap() {
-    document.getElementById('remapModal').classList.remove('open');
-    remapLineId = null;
-}
+document.getElementById('batchSelect').addEventListener('change', reconcile);
 
-function confirmRemap() {
-    if (!remapLineId || !current) return;
-    const schemeId = document.getElementById('remapScheme').value;
-    if (!schemeId) { alert('Choose a registered scheme'); return; }
-    getJson('/api/mf/import/batches/' + current.batch.id + '/remap', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({lineId: remapLineId, schemeId: parseInt(schemeId, 10)})
-    }).then(data => {
-        current = data;
-        closeRemap();
-        renderAll();
-    }).catch(err => alert('Remap failed: ' + err.message));
-}
-
-// --------------------------------------------------------------- filters
-['statusFilter', 'typeFilter'].forEach(id =>
-    document.getElementById(id).addEventListener('change', renderLines));
-document.getElementById('lineSearch').addEventListener('input', renderLines);
-document.getElementById('batchSelect').addEventListener('change', function () {
-    loadBatch(this.value);
-});
-
-// -------------------------------------------------------------- bootstrap
-const params = new URLSearchParams(window.location.search);
-const wanted = params.get('id');
-Promise.all([loadSchemes()])
-    .then(() => loadBatchList(wanted))
-    .then(id => (id ? loadBatch(id) : null))
-    .catch(err => alert('Error: ' + err.message));
+loadBatches();

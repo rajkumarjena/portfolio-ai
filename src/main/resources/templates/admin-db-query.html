@@ -5,11 +5,13 @@
 <main id="content" th:fragment="content" class="content">
     <h1>Database Query</h1>
 
-    <div class="note"><strong>Admin only (ADMIN_V1).</strong> Run a supported SQL statement against the
-        server database and see the outcome here. A successful <strong>DQL</strong> query (SELECT / VALUES)
-        downloads its complete result as a CSV file &mdash; column names as the header row, every returned
-        data row below. DML, DDL and TCL statements just report <code>Status: Success</code>, and a failing
-        query shows its database error on this screen so you can correct it and retry.</div>
+    <div class="note"><strong>Admin only (ADMIN_V1).</strong> Run supported SQL against the server
+        database and see the outcome here. The box takes a whole <strong>script</strong>: every
+        <code>;</code>-separated statement is executed, one after the other, and the result lists what each
+        one did. A successful <strong>DQL</strong> query (SELECT / VALUES) downloads its complete result as a
+        CSV file &mdash; column names as the header row, every returned data row below. <strong>DML</strong> and
+        <strong>DDL</strong> scripts commit together: if one statement fails, the whole script is rolled
+        back and the failing statement is shown with its database error, so nothing is half-applied.</div>
 
     <div class="form-container">
         <div class="form-left">
@@ -53,8 +55,12 @@
                     <li><strong>DML</strong> (INSERT, UPDATE, DELETE, REPLACE), <strong>DDL</strong>
                         (CREATE, DROP, ALTER, VACUUM) and <strong>TCL</strong> (BEGIN, COMMIT, ROLLBACK,
                         SAVEPOINT) report success without a file.</li>
-                    <li>Empty queries never run; a failing query shows the actual database error on
-                        this screen for a retry. Every execution is audit-logged with your user,
+                    <li>Paste several statements at once &mdash; each one runs and its row count is
+                        listed below the status line, e.g. all the <code>DELETE FROM ... where 1 = 1</code>
+                        statements of a cleanup script in a single execution.</li>
+                    <li>Empty queries never run; a failing statement shows the actual database error on
+                        this screen, named with its position in the script, and a DML / DDL script is
+                        rolled back as a whole. Every execution is audit-logged with your user,
                         the SQL and the outcome, with a statement timeout and a maximum result size
                         in force.</li>
                 </ul>

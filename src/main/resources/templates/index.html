@@ -34,6 +34,41 @@
             </table>
             <footer class="widget-foot" id="bondWidgetFoot"></footer>
         </article>
+
+        <!-- MFR_V11 #4: the Mutual Funds card sits right next to the Bonds card -
+             same chrome, same hover / keyboard zoom (app.js) and the same
+             server-computed figures, with the four columns of the sample sheet
+             (#2): Investment and Market Value for Self and for Family. -->
+        <article class="widget-card widget-card-wide" tabindex="0">
+            <header class="widget-head">
+                <span class="widget-icon"><i data-lucide="briefcase"></i></span>
+                <div class="widget-titles">
+                    <h2>Mutual Funds</h2>
+                    <span class="widget-sub">Portfolio Summary</span>
+                </div>
+            </header>
+            <div class="widget-scroll">
+            <table class="widget-table" id="mfWidgetTable">
+                <thead>
+                <tr class="widget-group">
+                    <th rowspan="2">Investment History</th>
+                    <th colspan="2">Self</th>
+                    <th colspan="2">Family</th>
+                </tr>
+                <tr>
+                    <th>Investment</th>
+                    <th>Market Value</th>
+                    <th>Investment</th>
+                    <th>Market Value</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr><td colspan="5" class="muted">Loading summary&hellip;</td></tr>
+                </tbody>
+            </table>
+            </div>
+            <footer class="widget-foot" id="mfWidgetFoot"></footer>
+        </article>
     </section>
 
     <h1>Portfolio Dashboard</h1>

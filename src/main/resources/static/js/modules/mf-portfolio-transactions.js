@@ -1,144 +1,178 @@
-// mf-portfolio-transactions-script.js - review all investments (MF.md 8 / 19)
-let txnRows = [];
-let headerMap = {};
+(function () {
+    'use strict';
+    // MFR_V9 1/2/6 / MFR_V10 4 - every record of mf_folio_scheme_transactions for
+    // the signed-in client, filtered by date range / AMC / scheme / text. One
+    // page of 50 rows is drawn inside a vertically scrolling table with numbered
+    // page controls underneath, so a ledger of thousands of rows stays navigable.
+    const PAGE_SIZE = 50;
+    const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    const number = value => Number(value || 0);
+    const money = value => number(value).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2});
+    const units = value => number(value).toLocaleString('en-IN', {minimumFractionDigits:0, maximumFractionDigits:6});
+    const isBlank = value => value === null || value === undefined || value === '';
+    const amountText = value => isBlank(value) ? '—' : money(value);
+    const unitsText = value => isBlank(value) ? '—' : units(value);
 
-function esc(s) {
-    var A = String.fromCharCode(38);
-    return String(s == null ? '' : s)
-        .replace(/&/g, A + 'amp;')
-        .replace(/</g, A + 'lt;')
-        .replace(/>/g, A + 'gt;')
-        .replace(/"/g, A + 'quot;')
-        .replace(/'/g, A + '#39;');
-}
+    const txnBody = document.querySelector('#txnTable tbody');
+    const scrollBox = document.getElementById('txnScroll');
+    const more = document.getElementById('txnMore');
+    const pager = document.getElementById('txnPager');
+    const emptyNote = document.getElementById('emptyNote');
+    const rangeNote = document.getElementById('rangeNote');
+    const amcSelect = document.getElementById('amcFilter');
+    const schemeSelect = document.getElementById('schemeFilter');
+    const state = {from:'', to:'', amcId:'', scheme:'', search:'',
+        page:1, pages:1, total:0, busy:false};
 
-function money(v) {
-    return (Number(v) || 0).toLocaleString('en-IN',
-        {minimumFractionDigits: 2, maximumFractionDigits: 2});
-}
-
-async function getJson(url, init) {
-    const res = await fetch(url, init);
-    const text = await res.text();
-    let body = null;
-    try { body = text ? JSON.parse(text) : null; } catch (e) { body = text; }
-    if (!res.ok) {
-        throw new Error((body && body.message) ? body.message : (text || ('HTTP ' + res.status)));
+    function requestUrl(page) {
+        const params = new URLSearchParams({page: String(page), size: String(PAGE_SIZE)});
+        if (state.from) params.set('from', state.from);
+        if (state.to) params.set('to', state.to);
+        if (state.amcId) params.set('amcId', state.amcId);
+        if (state.scheme) params.set('scheme', state.scheme);
+        if (state.search) params.set('q', state.search);
+        return '/api/mf/report/portfolio/transactions?' + params.toString();
     }
-    return body;
-}
 
-function qs() {
-    const p = new URLSearchParams();
-    const map = {
-        from: document.getElementById('fromDate').value,
-        to: document.getElementById('toDate').value,
-        amc: document.getElementById('amcFilter').value,
-        category: document.getElementById('categoryFilter').value,
-        q: document.getElementById('searchBox').value.trim(),
-        headerId: window.headerIdFilter || ''
-    };
-    Object.entries(map).forEach(([k, v]) => { if (v) p.set(k, v); });
-    const s = p.toString();
-    return s ? '?' + s : '';
-}
+    function remember() {
+        const params = new URLSearchParams(location.search);
+        [['from','from'], ['to','to'], ['amcId','amcId'], ['scheme','scheme'], ['q','search']]
+            .forEach(([key, field]) => {
+                if (state[field]) params.set(key, state[field]); else params.delete(key);
+            });
+        const text = params.toString();
+        history.replaceState(null, '', location.pathname + (text ? '?' + text : ''));
+    }
 
-function resetFilters() {
-    ['fromDate', 'toDate'].forEach(id => document.getElementById(id).value = '');
-    ['amcFilter', 'categoryFilter', 'searchBox'].forEach(id => document.getElementById(id).value = '');
-    window.headerIdFilter = '';
-    document.getElementById('holdingNote').style.display = 'none';
-    load();
-}
+    async function load(page) {
+        if (state.busy) return;
+        if (state.from && state.to && state.from > state.to) {
+            more.textContent = 'The From date is after the To date - pick a valid range.';
+            return;
+        }
+        state.busy = true;
+        try {
+            const response = await fetch(requestUrl(page), {cache:'no-store'});
+            if (!response.ok) throw new Error('Unable to load transactions (' + response.status + ').');
+            const data = await response.json();
+            fillOptions(data.amcs || [], data.schemeNames || []);
+            renderSummary(data.totals || {});
+            renderRange(data);
+            renderRows(data.rows || []);
+            const paging = data.pagination || {};
+            state.page = page;
+            state.total = paging.total || 0;
+            state.pages = Math.max(1, Math.ceil(state.total / PAGE_SIZE));
+            updateMore(paging);
+            renderPager();
+            emptyNote.style.display = state.total ? 'none' : 'block';
+            window.App && App.renderIcons();
+        } catch (error) {
+            more.textContent = error.message;
+        } finally {
+            state.busy = false;
+        }
+    }
 
-function renderSummary(summary) {
-    const s = summary || {};
-    document.getElementById('summaryCards').innerHTML = `
-        <div class="card"><div class="label">Transactions</div>
-            <div class="value">${s.txnCount || 0}</div></div>
-        <div class="card"><div class="label">Net Invested in Txns (₹)</div>
-            <div class="value">${money(s.txnInvested)}</div></div>
-        <div class="card blue"><div class="label">Holding Value (₹)</div>
-            <div class="value">${money(s.holdingValue)}</div></div>
-        <div class="card ${((s.holdingReturns || 0) >= 0 ? 'green' : 'red')}">
-            <div class="label">Holding Returns (₹)</div>
-            <div class="value ${((s.holdingReturns || 0) >= 0) ? 'pos' : 'neg'}">
-                ${money(s.holdingReturns)}</div></div>
-        <div class="card"><div class="label">Holding Units</div>
-            <div class="value">${(Number(s.holdingUnits) || 0).toFixed(4)}</div></div>`;
-}
+    function renderRows(rows) {
+        txnBody.innerHTML = rows.map(row => {
+            const debit = number(row.amount) < 0;
+            return `<tr>
+                <td>${esc(row.date)}</td><td class="left">${esc(row.amc)}</td><td>${esc(row.folioNo)}</td>
+                <td class="left">${esc(row.scheme)}</td><td>${esc(row.type)}</td>
+                <td class="left">${esc(row.description)}</td>
+                <td class="amt">${unitsText(row.units)}</td><td class="amt">${amountText(row.nav)}</td>
+                <td class="amt ${debit ? 'neg' : ''}">${amountText(row.amount)}</td>
+                <td class="amt">${unitsText(row.balance)}</td></tr>`;
+        }).join('');
+        scrollBox.scrollTop = 0;
+    }
 
-function renderTable() {
-    const tbody = document.querySelector('#txnTable tbody');
-    tbody.innerHTML = txnRows.map(t => {
-        const h = headerMap[String(t.headerId)] || {};
-        const s = h.scheme || {};
-        const sign = (Number(t.amount) || 0) < 0 ? 'color:#b02a37;' : '';
-        return `<tr>
-            <td>${esc(t.txnDate)}</td>
-            <td class="left">${esc(s.schemeName)}</td>
-            <td class="left">${esc(s.amcName)}</td>
-            <td>${esc(s.category)}</td>
-            <td>${esc(h.folioNo)}</td>
-            <td>${esc(t.txnType)}</td>
-            <td class="left">${esc(t.description)}</td>
-            <td class="amt">${(Number(t.units) || 0).toFixed(4)}</td>
-            <td class="amt">${t.nav ? money(t.nav) : '-'}</td>
-            <td class="amt" style="${sign}">${money(t.amount)}</td>
-            <td>${esc(t.source)}</td>
-        </tr>`;
-    }).join('');
-    document.getElementById('emptyNote').style.display = txnRows.length ? 'none' : 'block';
-}
+    function renderSummary(totals) {
+        document.getElementById('summaryCards').innerHTML = `
+            <div class="card"><div class="label">Records</div>
+                <div class="value">${number(totals.count).toLocaleString('en-IN')}</div></div>
+            <div class="card"><div class="label">Net Investment (₹)</div>
+                <div class="value">${money(totals.amount)}</div></div>
+            <div class="card blue"><div class="label">Market Value of the range (₹)</div>
+                <div class="value">${money(totals.marketValue)}</div></div>
+            <div class="card"><div class="label">Units of the range</div>
+                <div class="value">${units(totals.units)}</div></div>`;
+    }
 
-function load() {
-    return getJson('/api/mf/transactions' + qs()).then(data => {
-        txnRows = data.rows || [];
-        headerMap = data.headers || {};
-        renderSummary(data.summary);
-        renderTable();
-    }).catch(err => alert('Error loading transactions: ' + err.message));
-}
+    function renderRange(data) {
+        rangeNote.textContent = data.derived
+            ? 'Showing ' + (data.from || 'the first transaction') + ' to ' + (data.to || 'today')
+                + '. Net investment is the sum of the amounts; market value is the units of the range '
+                + 'times the last NAV of each scheme in the range.'
+            : '';
+    }
 
-function loadFilters() {
-    return getJson('/api/mf/filters').then(f => {
-        (f.amcs || []).forEach(v => {
-            const o = document.createElement('option');
-            o.value = v; o.textContent = v;
-            document.getElementById('amcFilter').appendChild(o);
+    function fillOptions(amcs, schemes) {
+        const currentAmc = amcSelect.value || state.amcId;
+        const currentScheme = schemeSelect.value || state.scheme;
+        amcSelect.innerHTML = '<option value="">All</option>'
+            + amcs.map(amc => `<option value="${esc(amc.id)}">${esc(amc.name)}</option>`).join('');
+        schemeSelect.innerHTML = '<option value="">All</option>'
+            + schemes.map(name => `<option value="${esc(name)}">${esc(name)}</option>`).join('');
+        amcSelect.value = currentAmc;
+        schemeSelect.value = currentScheme;
+    }
+
+    function updateMore(paging) {
+        if (!state.total) {
+            more.textContent = '';
+            return;
+        }
+        const from = (paging.from || 0) + 1;
+        const to = paging.to || state.total;
+        more.textContent = `Showing ${from.toLocaleString('en-IN')}–${to.toLocaleString('en-IN')} of `
+            + `${state.total.toLocaleString('en-IN')} transactions`
+            + (state.pages > 1 ? ' — scroll inside the table for the rest of this page.' : '.');
+    }
+
+    function renderPager() {
+        window.App && App.pager(pager, {
+            page: state.page, pages: state.pages,
+            onGo: page => load(page)
         });
-        (f.categories || []).forEach(v => {
-            const o = document.createElement('option');
-            o.value = v; o.textContent = v;
-            document.getElementById('categoryFilter').appendChild(o);
-        });
-    }).catch(() => {});
-}
+    }
 
-// deep link ?headerId=... - show which holding is filtered
-const params = new URLSearchParams(window.location.search);
-window.headerIdFilter = params.get('headerId') || '';
-if (window.headerIdFilter) {
-    fetch('/api/mf/headers/' + window.headerIdFilter).then(r => r.ok ? r.json() : null)
-        .then(d => {
-            if (!d) return;
-            const s = d.header.scheme || {};
-            const note = document.getElementById('holdingNote');
-            note.style.display = 'flex';
-            note.innerHTML = 'Filtered to: <b>' + esc(s.schemeName) + '</b> (folio ' +
-                esc(d.header.folioNo) + ') ' +
-                '<button class="small" style="margin-left:10px;" onclick="clearHold()">Clear</button>';
-        }).catch(() => {});
-}
+    function readFilters() {
+        state.from = document.getElementById('fromDate').value;
+        state.to = document.getElementById('toDate').value;
+        state.amcId = amcSelect.value;
+        state.scheme = schemeSelect.value;
+        state.search = document.getElementById('searchBox').value.trim();
+        remember();
+    }
 
-function clearHold() {
-    window.headerIdFilter = '';
-    document.getElementById('holdingNote').style.display = 'none';
-    load();
-}
+    function reset() {
+        ['fromDate', 'toDate', 'searchBox'].forEach(id => { document.getElementById(id).value = ''; });
+        amcSelect.value = '';
+        schemeSelect.value = '';
+        readFilters();
+        load(1);
+    }
 
-document.getElementById('searchBox').addEventListener('keydown', e => {
-    if (e.key === 'Enter') load();
-});
+    document.getElementById('applyFilters').addEventListener('click', () => { readFilters(); load(1); });
+    document.getElementById('resetFilters').addEventListener('click', reset);
+    [amcSelect, schemeSelect].forEach(select =>
+        select.addEventListener('change', () => { readFilters(); load(1); }));
+    document.getElementById('searchBox').addEventListener('keydown', event => {
+        if (event.key === 'Enter') { readFilters(); load(1); }
+    });
 
-Promise.all([loadFilters()]).then(load);
+    // deep links: portfolio row / detail page carry amcId, scheme and the range
+    const params = new URLSearchParams(location.search);
+    state.from = params.get('from') || '';
+    state.to = params.get('to') || '';
+    state.amcId = params.get('amcId') || '';
+    state.scheme = params.get('scheme') || '';
+    state.search = params.get('q') || '';
+    document.getElementById('fromDate').value = state.from;
+    document.getElementById('toDate').value = state.to;
+    document.getElementById('searchBox').value = state.search;
+
+    load(1);
+})();

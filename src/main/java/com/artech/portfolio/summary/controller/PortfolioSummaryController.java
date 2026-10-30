@@ -1,6 +1,7 @@
 package com.artech.portfolio.summary.controller;
 
 import com.artech.portfolio.summary.dto.BondWidgetView;
+import com.artech.portfolio.summary.dto.MfWidgetView;
 import com.artech.portfolio.summary.service.PortfolioSummaryService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -31,6 +32,16 @@ public class PortfolioSummaryController {
     @GetMapping("/bonds")
     public BondWidgetView bonds() {
         return portfolioSummaryService.getBondWidget();
+    }
+
+    /**
+     * MFR_V11 #1/#4: the Mutual Funds widget - the card next to Bonds. Investment
+     * and Market Value for Self and Family, computed entirely server-side with
+     * the corrected rules of MFR_V12 #2-#7.
+     */
+    @GetMapping("/mutual-funds")
+    public MfWidgetView mutualFunds() {
+        return portfolioSummaryService.getMfWidget();
     }
 
     /** Clean 401/400 with {"message": ...} instead of a container error page. */

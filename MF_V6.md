@@ -1,0 +1,5 @@
+1. mf_portfolio_summary's amc column should contain id of same amc in mf_amc, now i see the mc_portfolio_summary and mf_amc not establish parent child relationship, please fix it.
+2. mf_import_line and mf_amc should have parent-child relation i.e. mf_amc name in mf_import_line instead its id, please fix this part
+3. mf_portfolios's amc column should contain id of mf_amc, i see the mc_portfolios and mf_amc not establish parent child relationship, please fix it. 
+4. mf_summary_reconciliation and mf_amc should have parent-child relation i.e. mf_amc name in mf_summary_reconciliation's amc instead its id, please fix this part as parent child i..e normalize the data.
+5. please validate rest all mutual fund tables where ever data redundancy find please fix it. also please fix the entity-entity relationship for above changes 

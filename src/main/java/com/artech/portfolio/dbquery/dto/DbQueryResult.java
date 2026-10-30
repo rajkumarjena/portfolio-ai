@@ -31,6 +31,18 @@ public class DbQueryResult {
     /** DQL only: true when the result hit the configured maximum row cap. */
     private Boolean truncated;
 
-    /** DML/DDL/TCL: how many rows the statement changed (-1 when unknown). */
+    /** DML/DDL/TCL: how many rows the statements changed (-1 when unknown). */
     private Integer rowsAffected;
+
+    /**
+     * MFR_V13: how many statements the submitted script held. The screen needs
+     * it to say "N statement(s) executed" and to explain a partial result.
+     */
+    private Integer statementCount;
+
+    /**
+     * MFR_V13: what each statement did, in execution order - the screen lists
+     * the keyword, the SQL and the rows it changed.
+     */
+    private List<DbQueryStatementResult> statements;
 }

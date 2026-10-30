@@ -1,44 +1,55 @@
 <!DOCTYPE html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{layout :: page('Import from MF Central', ~{:: #content}, ~{:: #scripts})}">
+      th:replace="~{layout :: page('Import Mutual Fund From MF Central', ~{:: #content}, ~{:: #scripts})}">
 <body>
 <main id="content" th:fragment="content" class="content">
-    <h1>Import Mutual Fund Statement (MF Central / CAMS)</h1>
-    <p class="muted">Upload the CAS report in <b>xlsx</b>, <b>csv</b> or <b>pdf</b> format (MF.md 14).
-        The statement is only parsed into a reconciliation batch - nothing reaches your
-        portfolio until you accept it on the next screen (MF.md 16).</p>
+    <h1>Import Mutual Fund From MF Central</h1>
+    <p class="muted">Upload the KFINTECH mutual fund report (<b>pdf</b>) of the logged in
+        client (MF.md 1/4). The statement is read into the temporary tables only - your
+        portfolio changes when you accept it on the reconciliation screen (MF.md 12/13).</p>
 
     <div class="nav-buttons" style="margin-top:0;">
         <a class="btn" href="/index.html"><i data-lucide="house"></i>Home</a>
         <a class="btn primary" href="/mutualfunds/mf-import-view.html"><i data-lucide="refresh-cw"></i>Validate &amp; Sync</a>
+        <a class="btn" href="/mutualfunds/mf-summary-import.html">Import Summary Statement</a>
         <a class="btn" href="/mutualfunds/mf-portfolio.html"><i data-lucide="briefcase"></i>MF Portfolio</a>
     </div>
 
     <div class="form-container">
         <div class="form-left">
-            <h3>Upload CAS statement</h3>
+            <h3>Upload KFINTECH report</h3>
             <form id="uploadForm">
                 <div>
                     <label>Report file</label>
-                    <input type="file" id="fileInput" name="file" accept=".xlsx,.xls,.csv,.pdf" required>
+                    <input type="file" id="fileInput" name="file" accept=".pdf" required>
+                </div>
+                <div>
+                    <label for="reportPassword">Report password</label>
+                    <input type="password" id="reportPassword" name="password" autocomplete="off"
+                           placeholder="Password that opens the pdf (MF.md 2)">
                 </div>
                 <div id="uploadStatus" class="muted"></div>
-                <button type="submit" class="primary" id="uploadBtn"><i data-lucide="file-up"></i>Upload &amp; Reconcile</button>
+                <!-- MF.md 3 - the parser's own message is shown here, not as a popup -->
+                <div id="uploadError" class="form-error" style="display:none;" role="alert"></div>
+                <button type="submit" class="primary" id="uploadBtn">
+                    <i data-lucide="file-up"></i>Upload and Reconcile
+                </button>
             </form>
             <div class="muted" style="margin-top:14px;">
-                Supported: MF Central detailed report (xlsx), CAS statement (pdf) and the csv
-                export of the same columns.
+                Leave the password empty only when the pdf opens without one - a protected
+                report cannot be read otherwise (MF.md 3).
             </div>
         </div>
         <div class="form-right">
             <div class="calculation-card">
                 <h3>What happens next</h3>
                 <ol class="plain-list">
-                    <li>Rows are parsed and checked against the report totals.</li>
-                    <li>You review the reconciliation report - green means totals match.</li>
-                    <li>Duplicates are skipped automatically (MF.md 22).</li>
-                    <li>New AMCs/schemes can be remapped or registered on accept (MF.md 20).</li>
-                    <li>Only <b>Accept</b> writes the rows to your portfolio (MF.md 16).</li>
+                    <li>The report is parsed completely before anything is stored, so a
+                        failed upload keeps the last good staging data (MF.md 9).</li>
+                    <li>A first upload books the ADJUSTED rows that make the ledger add up
+                        to the statement's own totals (MF.md 10).</li>
+                    <li>Five reconciliation reports show what would change (MF.md 12).</li>
+                    <li>Only <b>Accept into Portfolio</b> writes the reviewed data (MF.md 13).</li>
                 </ol>
             </div>
         </div>
@@ -48,7 +59,8 @@
     <table class="data-table" id="batchTable">
         <thead>
         <tr>
-            <th>#</th><th>File</th><th>Type</th><th>Period</th><th>Uploaded</th>
+            <th>#</th><th class="left">File</th><th>Type</th><th>Period</th><th>Uploaded</th>
+            <th>Folios</th><th>Schemes</th><th>Transactions</th>
             <th>Status</th><th>Reconciliation</th><th class="left">Actions</th>
         </tr>
         </thead>

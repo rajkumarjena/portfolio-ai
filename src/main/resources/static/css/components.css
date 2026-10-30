@@ -177,6 +177,30 @@ table.mf-table tbody tr:hover,
     border-bottom: 1px solid var(--color-border);
 }
 
+/* MFR_V10 1/4: a long ledger scrolls inside its own box - the table body gets
+   a vertical scrollbar and keeps the sticky header, so the page around it never
+   grows to thousands of rows. */
+.table-scroll {
+    max-height: 65vh;
+    overflow: auto;
+    background: var(--color-surface);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    margin-bottom: var(--space-2);
+}
+
+.table-scroll .data-table {
+    /* the wrapper is the only scroll container, so the sticky header sticks to
+       its top edge - a table that scrolls on its own would defeat that */
+    display: table;
+    overflow: visible;
+    margin-bottom: 0;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.table-scroll .data-table thead th { z-index: 1; }
+
 /* --------------------------------------------------------- summary cards -- */
 .cards { display: flex; flex-wrap: wrap; gap: var(--space-3); margin: var(--space-4) 0; }
 
@@ -254,6 +278,13 @@ table.mf-table tbody tr:hover,
 
 .status-banner .sub { display: block; font-weight: 400; font-size: var(--fs-small); margin-top: var(--space-1); }
 
+/* MFR_V13: one monospace line per executed SQL statement in the result banner,
+   so a pasted script reports what every DELETE / DROP actually did. */
+.status-banner .sub.sql {
+    font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+    word-break: break-word;
+}
+
 /* reconciliation row states (MF.md 15/20) */
 tr.row-NEW        { background: var(--color-pass-soft) !important; }
 tr.row-EXISTS     { background: var(--color-neutral-soft) !important; color: var(--color-text-muted); }
@@ -261,6 +292,13 @@ tr.row-NEW_SCHEME { background: var(--color-warn-soft) !important; }
 tr.row-MAPPED     { background: var(--color-info-soft) !important; }
 tr.row-ERROR      { background: var(--color-fail-soft) !important; }
 tr.row-SKIPPED     { background: #f4f5f7 !important; color: var(--color-text-muted); }
+
+/* reconciliation report row tones (MF.md 12: green / highlighted / red) */
+tr.tone-green  { background: var(--color-pass-soft) !important; }
+tr.tone-amber  { background: var(--color-warn-soft) !important; }
+tr.tone-red    { background: var(--color-fail-soft) !important; }
+tr.tone-blue   { background: var(--color-info-soft) !important; }
+tr.tone-grey   { background: var(--color-neutral-soft) !important; color: var(--color-text-muted); }
 
 /* -------------------------------------------------------------- filters --- */
 .filter-section {
@@ -326,6 +364,13 @@ tr.row-SKIPPED     { background: #f4f5f7 !important; color: var(--color-text-mut
 /* ---------------------------------------------------------- pagination ---- */
 .pagination { margin: var(--space-4) 0; text-align: center; }
 .pagination button { margin: 0 var(--space-1); }
+.pagination button.active {
+    background: var(--color-primary);
+    border-color: var(--color-primary-dark);
+    color: #fff;
+}
+.pagination button[disabled] { opacity: 0.5; cursor: default; }
+.pager-gap { margin: 0 var(--space-1); color: var(--color-text-muted); }
 
 /* ---------------------------------------------------- auth card screens --- */
 .auth-card {
@@ -450,6 +495,12 @@ tr.row-SKIPPED     { background: #f4f5f7 !important; color: var(--color-text-mut
 
 .widget-table th:first-child { text-align: left; }
 
+/* MFR_V11 #2: the Mutual Funds header is stacked the way the sample sheet
+   prints it - "Self" and "Family" over their Investment / Market Value
+   measures, with the corner cell spanning both header rows. */
+.widget-table tr.widget-group th { text-align: center; border-bottom: none; }
+.widget-table th[rowspan] { vertical-align: bottom; }
+
 .widget-table td {
     padding: var(--space-3) var(--space-4);
     border-bottom: 1px solid var(--color-border);
@@ -476,6 +527,20 @@ tr.row-SKIPPED     { background: #f4f5f7 !important; color: var(--color-text-mut
 
 /* The Family column is the secondary figure - the accent teal sets it apart. */
 .widget-table td.amt.family { color: var(--color-accent); }
+
+/* MFR_V12 #6: market value worth less than the money put in is red - in the
+   Self and in the Family column alike, so this rule comes after the accent. */
+.widget-table td.amt.loss { color: var(--color-fail); }
+
+/* MFR_V11 #4: below the tile breakpoint the Mutual Funds table is wider than
+   a phone-width card (four money columns), so it scrolls sideways instead of
+   being clipped by the card. */
+.widget-scroll { overflow-x: auto; }
+
+@media (max-width: 700px) {
+    .widget-card-wide .widget-table th { padding: 4px 6px; }
+    .widget-card-wide .widget-table td { padding: 6px 6px; }
+}
 
 .widget-foot {
     margin-top: auto;
@@ -520,6 +585,19 @@ tr.row-SKIPPED     { background: #f4f5f7 !important; color: var(--color-text-mut
         outline: 2px solid var(--color-primary);
         outline-offset: 2px;
     }
+
+    /* MFR_V11 #4: the Mutual Funds tile keeps this chrome but carries four
+       figure columns (Self and Family, each Investment + Market Value), so it
+       takes a wider slot than the Bonds tile and its caption wraps instead of
+       being cut off. */
+    .widget-card-wide {
+        flex: 0 1 calc(45% - 12px);
+        min-width: 360px;
+        max-width: 400px;
+    }
+
+    .widget-card-wide .widget-label { white-space: normal; overflow: visible; text-overflow: clip; }
+    .widget-card-wide .widget-range { white-space: normal; }
 
     /* Compact head: one short line, small icon - titles never wrap (#3). */
     .widget-head { gap: var(--space-1); padding: 4px var(--space-2); }

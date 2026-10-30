@@ -1,0 +1,4 @@
+1. Please develop an widget just like 'Bond Portfolio Report' widget in Dashboard for Mutual Fund with same look and feel and screen behaviour.
+2. Please design the Mutual Fund portfolio summary widget data as given in 'MF_Report.xlsx'. Here in this report, its investment vs market value for self and family for given duration, sample data given in the excelsheet.
+3. The investment value is sum of amount for that period from mf_folio_scheme_transactions table and market value is sum of total units of any scheme from mf_folio_scheme_transactions multipy witih latest nav value from mf_folio_schemes_valuation table for that scheme and added all those for all the scheme invested during that period. note - each scheme's nav value is different and its units hence market value should be sum of all scheme's units multiply with its nav value.
+4. Please add the new widget for mutual fund right next to Bond widget.
