@@ -1,10 +1,10 @@
-// portfolio-summary.js - BONDBP_V6: the Portfolio Summary widget strip on top
-// of the dashboard (#2), currently the Bonds card (#1).
+// portfolio-summary.js - the Portfolio Summary widget strip on top of the
+// dashboard (BONDBP_V6 #2 for the layout, MFR_V11 for the Mutual Funds card).
 //
 // #6 is the important one: every figure and every date boundary arrives from
-// the server already computed (/api/portfolio/summary/bonds). This module only
-// formats (Rs + "25 Oct 2026") and paints what it is given - no arithmetic
-// here, ever.
+// the server already computed (/api/portfolio/summary/bonds and
+// /api/portfolio/summary/mutual-funds). This module only formats (Rs +
+// "25 Oct 2026") and paints what it is given - no arithmetic here, ever.
 (function () {
   'use strict';
 
@@ -69,6 +69,46 @@
     }
   }
 
+  // ------------------------------------------------- MFR_V11 Mutual Funds --
+  // #2: one row per period, four figures - Investment and Market Value for
+  // Self, then the same two for Family. MFR_V12 #2-#5: both figures are
+  // computed on the server (amount sum without the ADJUSTED rows, and the
+  // period's units x each scheme's own NAV; the total comes from the statement),
+  // so this function only formats them. #6: a market value below the money put
+  // in arrives with its loss flag set and is painted red here.
+  function mfBody() {
+    return document.querySelector('#mfWidgetTable tbody');
+  }
+
+  function renderMf(summary) {
+    const body = mfBody();
+    if (!body) return;
+    body.innerHTML = (summary.rows || []).map(row => `
+      <tr>
+        <td class="left">
+          <span class="widget-label">${esc(row.label)}</span>
+          <span class="widget-range">${esc(fmtRange(row))}</span>
+        </td>
+        <td class="amt">${money(row.selfInvestment)}</td>
+        <td class="amt${row.selfInLoss ? ' loss' : ''}">${money(row.selfMarketValue)}</td>
+        <td class="amt family">${money(row.familyInvestment)}</td>
+        <td class="amt family${row.familyInLoss ? ' loss' : ''}">${money(row.familyMarketValue)}</td>
+      </tr>`).join('');
+
+    const foot = document.getElementById('mfWidgetFoot');
+    if (foot) {
+      foot.textContent = 'As on ' + fmtDate(summary.asOf) + ' · valued at scheme NAV';
+    }
+    if (window.App && window.App.renderIcons) window.App.renderIcons();
+  }
+
+  function renderMfMessage(message) {
+    const body = mfBody();
+    if (body) {
+      body.innerHTML = `<tr><td colspan="5" class="muted">${esc(message)}</td></tr>`;
+    }
+  }
+
   Api.guard(Api.get('/api/portfolio/summary/bonds'), 'Could not load the Bonds widget')
     .then(function (summary) {
       if (!summary) {
@@ -76,5 +116,15 @@
         return;
       }
       render(summary);
+    });
+
+  Api.guard(Api.get('/api/portfolio/summary/mutual-funds'),
+            'Could not load the Mutual Funds widget')
+    .then(function (summary) {
+      if (!summary) {
+        renderMfMessage('Summary unavailable');
+        return;
+      }
+      renderMf(summary);
     });
 })();

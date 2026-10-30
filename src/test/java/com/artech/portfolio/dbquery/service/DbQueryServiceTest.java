@@ -2,6 +2,8 @@ package com.artech.portfolio.dbquery.service;
 
 import com.artech.portfolio.auth.service.AuthException;
 import com.artech.portfolio.auth.service.CurrentUserService;
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
 import com.artech.portfolio.dbquery.dto.DbQueryRequest;
 import com.artech.portfolio.dbquery.dto.DbQueryResult;
 import org.junit.jupiter.api.BeforeEach;
@@ -236,6 +238,136 @@ class DbQueryServiceTest {
         DbQueryResult result = service.execute(request("DQL", "SELECT COUNT(*) AS n FROM sample"));
         assertEquals("Success", result.getStatus());
         assertEquals("2", result.getRows().get(0).get(0));
+    }
+
+    // ---------------------------------------- MFR_V13: multi-statement script
+
+    @Test
+    void everyDmlStatementOfTheScriptRunsNotJustTheFirst() {
+        DbQueryResult result = service.execute(request("DML",
+                "DELETE FROM sample WHERE id = 1;\n"
+                        + "DELETE FROM sample WHERE id = 2;\n"));
+
+        assertEquals(2, result.getStatementCount());
+        assertEquals(2, result.getStatements().size());
+        assertEquals(2, result.getRowsAffected(), "the counts of all statements are summed");
+        assertEquals(1, result.getStatements().get(0).getRowsAffected());
+        assertEquals(1, result.getStatements().get(1).getRowsAffected());
+        assertEquals("0", scalar("SELECT COUNT(*) FROM sample"),
+                "both DELETE statements must have removed their rows");
+    }
+
+    @Test
+    void everyDdlStatementOfTheScriptRuns() {
+        DbQueryResult result = service.execute(request("DDL",
+                "CREATE TABLE one (x INTEGER);\nCREATE TABLE two (y TEXT);"));
+
+        assertEquals(2, result.getStatementCount());
+        assertEquals(2, result.getStatements().size());
+        assertEquals("2", scalar("SELECT COUNT(*) FROM sqlite_master "
+                + "WHERE type = 'table' AND name IN ('one', 'two')"));
+    }
+
+    @Test
+    void aFailingStatementRollsBackTheWholeScript() {
+        AuthException error = expectRejected(request("DML",
+                "DELETE FROM sample;\nDELETE FROM does_not_exist;"));
+
+        assertTrue(error.getMessage().contains("statement 2 of 2"), error.getMessage());
+        assertTrue(error.getMessage().contains("nothing was applied"), error.getMessage());
+        assertTrue(error.getMessage().contains("no such table"), error.getMessage());
+        assertEquals("2", scalar("SELECT COUNT(*) FROM sample"),
+                "the successful DELETE of statement 1 must be rolled back too");
+    }
+
+    /**
+     * Regression: Connection.setAutoCommit(false) on the pooled proxy does NOT
+     * open a SQLite transaction - the DELETE stayed committed while the
+     * rollback failed with "cannot rollback - no transaction is active". The
+     * script must roll back through the pool the application really uses.
+     */
+    @Test
+    void aFailingStatementRollsBackThroughAPooledConnection() throws Exception {
+        HikariConfig config = new HikariConfig();
+        config.setJdbcUrl("jdbc:sqlite:" + tempDir.resolve("pooled.db"));
+        config.setMaximumPoolSize(1);
+        config.setMinimumIdle(1);
+
+        try (HikariDataSource pooled = new HikariDataSource(config)) {
+            try (Connection connection = pooled.getConnection();
+                 Statement statement = connection.createStatement()) {
+                statement.execute("CREATE TABLE guarded (x INTEGER)");
+                statement.execute("INSERT INTO guarded (x) VALUES (1)");
+            }
+
+            DbQueryService pooledService =
+                    new DbQueryService(pooled, currentUserService, 100, 30, 100_000);
+            AuthException error = assertThrows(AuthException.class, () -> pooledService.execute(
+                    request("DML", "DELETE FROM guarded;\nDELETE FROM does_not_exist;")));
+            assertTrue(error.getMessage().contains("rolled back"), error.getMessage());
+
+            DbQueryResult after = pooledService.execute(
+                    request("DQL", "SELECT COUNT(*) AS n FROM guarded"));
+            assertEquals("1", after.getRows().get(0).get(0),
+                    "the DELETE of statement 1 must be rolled back through the pool");
+        }
+    }
+
+    @Test
+    void semicolonInsideAStringLiteralDoesNotSplitTheStatement() {
+        DbQueryResult insert = service.execute(request("DML",
+                "INSERT INTO sample (id, name) VALUES (3, 'a;b');"));
+        assertEquals(1, insert.getStatementCount(), "the ';' is data, not a separator");
+
+        assertEquals("a;b", scalar("SELECT name FROM sample WHERE id = 3"));
+    }
+
+    @Test
+    void semicolonsInsideCommentsDoNotSplitTheStatement() {
+        DbQueryResult result = service.execute(request("DML",
+                "-- cleanup; step 1\nDELETE FROM sample WHERE id = 2; -- finished;\n"));
+
+        assertEquals(1, result.getStatementCount());
+        assertEquals(1, result.getRowsAffected());
+        assertEquals("1", scalar("SELECT COUNT(*) FROM sample"));
+    }
+
+    @Test
+    void aStatementOutsideTheCategoryIsRejectedEvenWhenItIsNotTheFirst() {
+        AuthException error = expectRejected(request("DML",
+                "DELETE FROM sample;\nDROP TABLE sample;"));
+
+        assertTrue(error.getMessage().contains("Statement 2 of 2"), error.getMessage());
+        assertTrue(error.getMessage().contains("'DROP' belongs to DDL, not to DML"),
+                error.getMessage());
+        assertEquals("2", scalar("SELECT COUNT(*) FROM sample"), "nothing may run");
+    }
+
+    @Test
+    void dqlScriptReturnsTheFirstResultSet() {
+        DbQueryResult result = service.execute(request("DQL",
+                "SELECT id, name FROM sample ORDER BY id;\nSELECT 99 AS other;"));
+
+        assertEquals(2, result.getStatementCount());
+        assertEquals(List.of("id", "name"), result.getColumns());
+        assertEquals(2, result.getRowCount());
+    }
+
+    @Test
+    void vacuumScriptStillRunsOutsideATransaction() {
+        // SQLite refuses VACUUM inside a transaction: the DDL script must not be wrapped.
+        DbQueryResult result = service.execute(request("DDL",
+                "CREATE TABLE vacuumed (x INTEGER);\nVACUUM;"));
+
+        assertEquals(2, result.getStatementCount());
+        assertEquals("1", scalar("SELECT COUNT(*) FROM sqlite_master "
+                + "WHERE type = 'table' AND name = 'vacuumed'"));
+    }
+
+    /** First column of the first row of a query (test helper). */
+    private String scalar(String sql) {
+        DbQueryResult result = service.execute(request("DQL", sql));
+        return result.getRows().isEmpty() ? null : result.getRows().get(0).get(0);
     }
 
     /**

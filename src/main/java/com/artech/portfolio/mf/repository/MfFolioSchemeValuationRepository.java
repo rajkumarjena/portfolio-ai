@@ -15,6 +15,12 @@ public interface MfFolioSchemeValuationRepository extends JpaRepository<MfFolioS
 
     List<MfFolioSchemeValuation> findBySchemeIdIn(Collection<Long> schemeIds);
 
+    /**
+     * MFR_V11 #3: every valuation of one owner scope in a single query; the
+     * widget keeps the newest NAV per scheme from the result.
+     */
+    List<MfFolioSchemeValuation> findByOwnerPanIn(Collection<String> ownerPans);
+
     List<MfFolioSchemeValuation> findByOwnerPanAndSchemeIdIn(String ownerPan, Collection<Long> schemeIds);
 
     @Modifying

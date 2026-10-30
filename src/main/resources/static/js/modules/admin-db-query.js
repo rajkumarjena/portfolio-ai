@@ -1,21 +1,41 @@
 // admin-db-query.js - ADMIN_V1 Database Query screen: pick a SQL category,
 // type the statement, execute it and read the outcome right here. A successful
 // DQL query downloads its result as CSV (column headers first, then every
-// returned row); DML/DDL/TCL only show "Status: Success". All validation and
-// execution rules live on the server - the checks here just fail fast.
+// returned row); DML/DDL/TCL report each statement that ran (MFR_V13: the box
+// takes a whole script, every ';'-separated statement is executed). All
+// validation and execution rules live on the server - the checks here just
+// fail fast.
 (function () {
   'use strict';
 
   function el(id) { return document.getElementById(id); }
 
   // #4: the status / error area on this screen (green = ok, red = failure).
-  function status(message, ok) {
+  // MFR_V13: details are one line per executed statement, so the admin can see
+  // that each DELETE / DROP really ran and how many rows it changed.
+  function status(message, ok, details) {
     var box = el('statusBanner');
     if (!box) return;
     box.textContent = message || '';
+    (details || []).forEach(function (line) {
+      var sub = document.createElement('span');
+      sub.className = 'sub sql';
+      sub.textContent = line;
+      box.appendChild(sub);
+    });
     box.style.display = message ? 'block' : 'none';
     box.classList.toggle('error', !ok);
     box.classList.toggle('info', !!ok);
+  }
+
+  // MFR_V13: "1. DELETE FROM mf_amc where 1 = 1 -> 3 row(s)" per statement.
+  function statementLines(result) {
+    var dml = result.category === 'DML';
+    return (result.statements || []).map(function (s) {
+      var count = (dml && typeof s.rowsAffected === 'number' && s.rowsAffected >= 0)
+        ? ' -> ' + s.rowsAffected + ' row(s)' : '';
+      return s.index + '. ' + (s.statement || s.keyword || '') + count;
+    });
   }
 
   // RFC 4180 quoting: wrap cells that carry commas, quotes or line breaks.
@@ -71,15 +91,18 @@
     Api.post('/api/admin/query', { category: category, sql: sql })
       .then(function (result) {
         if (!result) return; // Api already surfaced the transport problem
+        var count = result.statementCount || 1;
         if (result.category === 'DQL') {
           downloadCsv(result);
           status('Status: Success - ' + result.rowCount + ' row(s) returned, CSV downloaded'
             + (result.truncated ? ' (result capped at the configured maximum size)' : '') + '.',
-            true);
+            true,
+            count > 1 ? ['Note: ' + count + ' statements ran; the CSV holds the first result set.'] : []);
         } else {
           var affected = (typeof result.rowsAffected === 'number' && result.rowsAffected >= 0)
             ? ' - ' + result.rowsAffected + ' row(s) affected' : '';
-          status('Status: Success' + affected + '.', true);
+          status('Status: Success - ' + count + ' statement(s) executed' + affected + '.',
+            true, statementLines(result));
         }
       })
       .catch(function (err) {

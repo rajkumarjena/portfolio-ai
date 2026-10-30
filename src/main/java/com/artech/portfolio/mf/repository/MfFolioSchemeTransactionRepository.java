@@ -16,6 +16,13 @@ public interface MfFolioSchemeTransactionRepository extends JpaRepository<MfFoli
 
     List<MfFolioSchemeTransaction> findByOwnerPan(String ownerPan);
 
+    /**
+     * MFR_V11 #3: the whole ledger of one owner scope (the user's PAN or the
+     * user plus his family members), loaded in a single query so the widget
+     * walks it once instead of running one query per period and per scheme.
+     */
+    List<MfFolioSchemeTransaction> findByOwnerPanIn(Collection<String> ownerPans);
+
     List<MfFolioSchemeTransaction> findBySchemeIdIn(Collection<Long> schemeIds);
 
     List<MfFolioSchemeTransaction> findByOwnerPanAndSchemeIdInOrderByTxnDateDescIdDesc(

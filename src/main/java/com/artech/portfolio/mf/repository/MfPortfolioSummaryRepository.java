@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 
 /** Accepted PORTFOLIO SUMMARY rows (MF.md 7a). */
@@ -21,6 +22,14 @@ public interface MfPortfolioSummaryRepository extends JpaRepository<MfPortfolioS
 
     @Query("select s from MfPortfolioSummary s where s.ownerPan = :ownerPan and s.total = true")
     java.util.Optional<MfPortfolioSummary> findTotalByOwner(@Param("ownerPan") String ownerPan);
+
+    /**
+     * MFR_V12 #5: the printed "Total" line of every owner in the scope - one
+     * row per PAN - so the widget's last row is the statement's own total, not
+     * a figure derived from the ledger.
+     */
+    @Query("select s from MfPortfolioSummary s where s.ownerPan in :ownerPans and s.total = true")
+    List<MfPortfolioSummary> findTotalsByOwnerPanIn(@Param("ownerPans") Collection<String> ownerPans);
 
     @Modifying
     @Transactional

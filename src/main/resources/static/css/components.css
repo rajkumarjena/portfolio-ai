@@ -278,6 +278,13 @@ table.mf-table tbody tr:hover,
 
 .status-banner .sub { display: block; font-weight: 400; font-size: var(--fs-small); margin-top: var(--space-1); }
 
+/* MFR_V13: one monospace line per executed SQL statement in the result banner,
+   so a pasted script reports what every DELETE / DROP actually did. */
+.status-banner .sub.sql {
+    font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+    word-break: break-word;
+}
+
 /* reconciliation row states (MF.md 15/20) */
 tr.row-NEW        { background: var(--color-pass-soft) !important; }
 tr.row-EXISTS     { background: var(--color-neutral-soft) !important; color: var(--color-text-muted); }
@@ -488,6 +495,12 @@ tr.tone-grey   { background: var(--color-neutral-soft) !important; color: var(--
 
 .widget-table th:first-child { text-align: left; }
 
+/* MFR_V11 #2: the Mutual Funds header is stacked the way the sample sheet
+   prints it - "Self" and "Family" over their Investment / Market Value
+   measures, with the corner cell spanning both header rows. */
+.widget-table tr.widget-group th { text-align: center; border-bottom: none; }
+.widget-table th[rowspan] { vertical-align: bottom; }
+
 .widget-table td {
     padding: var(--space-3) var(--space-4);
     border-bottom: 1px solid var(--color-border);
@@ -514,6 +527,20 @@ tr.tone-grey   { background: var(--color-neutral-soft) !important; color: var(--
 
 /* The Family column is the secondary figure - the accent teal sets it apart. */
 .widget-table td.amt.family { color: var(--color-accent); }
+
+/* MFR_V12 #6: market value worth less than the money put in is red - in the
+   Self and in the Family column alike, so this rule comes after the accent. */
+.widget-table td.amt.loss { color: var(--color-fail); }
+
+/* MFR_V11 #4: below the tile breakpoint the Mutual Funds table is wider than
+   a phone-width card (four money columns), so it scrolls sideways instead of
+   being clipped by the card. */
+.widget-scroll { overflow-x: auto; }
+
+@media (max-width: 700px) {
+    .widget-card-wide .widget-table th { padding: 4px 6px; }
+    .widget-card-wide .widget-table td { padding: 6px 6px; }
+}
 
 .widget-foot {
     margin-top: auto;
@@ -558,6 +585,19 @@ tr.tone-grey   { background: var(--color-neutral-soft) !important; color: var(--
         outline: 2px solid var(--color-primary);
         outline-offset: 2px;
     }
+
+    /* MFR_V11 #4: the Mutual Funds tile keeps this chrome but carries four
+       figure columns (Self and Family, each Investment + Market Value), so it
+       takes a wider slot than the Bonds tile and its caption wraps instead of
+       being cut off. */
+    .widget-card-wide {
+        flex: 0 1 calc(45% - 12px);
+        min-width: 360px;
+        max-width: 400px;
+    }
+
+    .widget-card-wide .widget-label { white-space: normal; overflow: visible; text-overflow: clip; }
+    .widget-card-wide .widget-range { white-space: normal; }
 
     /* Compact head: one short line, small icon - titles never wrap (#3). */
     .widget-head { gap: var(--space-1); padding: 4px var(--space-2); }

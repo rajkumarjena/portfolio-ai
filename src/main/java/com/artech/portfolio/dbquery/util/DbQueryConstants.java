@@ -1,8 +1,8 @@
 package com.artech.portfolio.dbquery.util;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * ADMIN_V1 Database Query categories and the statements each one allows:
@@ -58,5 +58,38 @@ public class DbQueryConstants {
     /** The category a statement keyword belongs to, or null when unsupported. */
     public static String categoryOfStatement(String keyword) {
         return STATEMENT_CATEGORY.get(keyword);
+    }
+
+    /**
+     * MFR_V13: the SQL text with leading whitespace and -- / * *...* comments
+     * removed, so a chunk that is comment-only can be told apart from a real
+     * statement when the admin submits a whole script.
+     */
+    public static String stripLeadingComments(String sql) {
+        String rest = sql == null ? "" : sql;
+        while (true) {
+            rest = rest.trim();
+            if (rest.startsWith("--")) {
+                int nl = rest.indexOf('\n');
+                if (nl < 0) return "";
+                rest = rest.substring(nl + 1);
+            } else if (rest.startsWith("/*")) {
+                int end = rest.indexOf("*/");
+                if (end < 0) return "";
+                rest = rest.substring(end + 2);
+            } else {
+                return rest;
+            }
+        }
+    }
+
+    /** First SQL keyword, skipping leading whitespace and comments ("" when none). */
+    public static String firstKeyword(String sql) {
+        String rest = stripLeadingComments(sql);
+        int end = 0;
+        while (end < rest.length() && Character.isLetter(rest.charAt(end))) {
+            end++;
+        }
+        return rest.substring(0, end).toUpperCase(Locale.ROOT);
     }
 }
