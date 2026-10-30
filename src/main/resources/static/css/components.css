@@ -177,6 +177,30 @@ table.mf-table tbody tr:hover,
     border-bottom: 1px solid var(--color-border);
 }
 
+/* MFR_V10 1/4: a long ledger scrolls inside its own box - the table body gets
+   a vertical scrollbar and keeps the sticky header, so the page around it never
+   grows to thousands of rows. */
+.table-scroll {
+    max-height: 65vh;
+    overflow: auto;
+    background: var(--color-surface);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    margin-bottom: var(--space-2);
+}
+
+.table-scroll .data-table {
+    /* the wrapper is the only scroll container, so the sticky header sticks to
+       its top edge - a table that scrolls on its own would defeat that */
+    display: table;
+    overflow: visible;
+    margin-bottom: 0;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.table-scroll .data-table thead th { z-index: 1; }
+
 /* --------------------------------------------------------- summary cards -- */
 .cards { display: flex; flex-wrap: wrap; gap: var(--space-3); margin: var(--space-4) 0; }
 
@@ -333,6 +357,13 @@ tr.tone-grey   { background: var(--color-neutral-soft) !important; color: var(--
 /* ---------------------------------------------------------- pagination ---- */
 .pagination { margin: var(--space-4) 0; text-align: center; }
 .pagination button { margin: 0 var(--space-1); }
+.pagination button.active {
+    background: var(--color-primary);
+    border-color: var(--color-primary-dark);
+    color: #fff;
+}
+.pagination button[disabled] { opacity: 0.5; cursor: default; }
+.pager-gap { margin: 0 var(--space-1); color: var(--color-text-muted); }
 
 /* ---------------------------------------------------- auth card screens --- */
 .auth-card {

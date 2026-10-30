@@ -132,11 +132,49 @@
         startMaintenancePolling();
     });
 
+    // MFR_V10 4: numbered page controls for a table that shows one page at a
+    // time. `container` is the .pagination element, `onGo(page)` receives the
+    // page the user asked for. Only a window around the current page is drawn,
+    // so a report of hundreds of pages still fits on one line.
+    function pager(container, options) {
+        if (!container) return;
+        var page = Math.max(1, (options && options.page) || 1);
+        var pages = Math.max(1, (options && options.pages) || 1);
+        var onGo = (options && options.onGo) || function () {};
+        if (pages <= 1) {
+            container.innerHTML = '';
+            return;
+        }
+        var numbers = [];
+        for (var n = 1; n <= pages; n++) {
+            if (n === 1 || n === pages || Math.abs(n - page) <= 2) numbers.push(n);
+        }
+        var html = '<button type="button" data-page="' + (page - 1) + '"'
+            + (page <= 1 ? ' disabled' : '') + '>Prev</button>';
+        var previous = 0;
+        numbers.forEach(function (n) {
+            if (previous && n - previous > 1) html += '<span class="pager-gap">…</span>';
+            html += '<button type="button" data-page="' + n + '"'
+                + (n === page ? ' class="active"' : '') + '>' + n + '</button>';
+            previous = n;
+        });
+        html += '<button type="button" data-page="' + (page + 1) + '"'
+            + (page >= pages ? ' disabled' : '') + '>Next</button>';
+        container.innerHTML = html;
+        container.querySelectorAll('button[data-page]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                var target = parseInt(button.dataset.page, 10);
+                if (target >= 1 && target <= pages && target !== page) onGo(target);
+            });
+        });
+    }
+
     // Expose for inline handlers in the layout / templates.
     window.App = {
         logout: logout,
         renderIcons: renderIcons,
         pollMaintenance: pollMaintenance,
-        applyMaintenance: applyMaintenance
+        applyMaintenance: applyMaintenance,
+        pager: pager
     };
 })();

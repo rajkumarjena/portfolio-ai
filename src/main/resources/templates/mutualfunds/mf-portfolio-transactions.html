@@ -4,8 +4,8 @@
 <body>
 <main id="content" th:fragment="content" class="content">
     <h1>Mutual Fund Portfolio - All Transactions</h1>
-    <p class="muted">Review every investment - SIP instalments, purchases, redemptions and
-        imported CAS entries (MF.md 8 / 19).</p>
+    <p class="muted">Every accepted ledger row - SIP instalments, purchases, redemptions, switches,
+        dividends and the imported CAS adjustments.</p>
 
     <div class="nav-buttons" style="margin-top:0;">
         <a class="btn" href="/index.html"><i data-lucide="house"></i>Home</a>
@@ -14,33 +14,36 @@
         <a class="btn" href="/mutualfunds/mf-import.html"><i data-lucide="file-up"></i>Import</a>
     </div>
 
+    <div class="filter-section">
+        <label for="fromDate">From</label><input type="date" id="fromDate">
+        <label for="toDate">To</label><input type="date" id="toDate">
+        <label for="amcFilter">AMC</label>
+        <select id="amcFilter"><option value="">All</option></select>
+        <label for="schemeFilter">Scheme</label>
+        <select id="schemeFilter"><option value="">All</option></select>
+        <label for="searchBox">Search</label>
+        <input type="search" id="searchBox" placeholder="scheme / description">
+        <button class="primary" id="applyFilters"><i data-lucide="filter"></i>Apply</button>
+        <button id="resetFilters"><i data-lucide="filter-x"></i>Reset</button>
+    </div>
+    <div id="rangeNote" class="muted" style="padding:0 4px 10px;"></div>
+
     <div class="cards" id="summaryCards"></div>
 
-    <div class="filter-section">
-        <label>From</label><input type="date" id="fromDate">
-        <label>To</label><input type="date" id="toDate">
-        <label>Fund house / AMC</label>
-        <select id="amcFilter"><option value="">All</option></select>
-        <label>Category</label>
-        <select id="categoryFilter"><option value="">All</option></select>
-        <label>Search</label>
-        <input type="search" id="searchBox" placeholder="scheme / description">
-        <button class="primary" onclick="load()"><i data-lucide="filter"></i>Apply</button>
-        <button onclick="resetFilters()">Reset</button>
+    <div class="table-scroll" id="txnScroll">
+        <table class="data-table" id="txnTable">
+            <thead>
+            <tr>
+                <th>Date</th><th class="left">AMC</th><th>Folio</th><th class="left">Scheme</th>
+                <th>Type</th><th class="left">Description</th>
+                <th>Units</th><th>NAV</th><th>Amount (₹)</th><th>Balance</th>
+            </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
     </div>
-
-    <div id="holdingNote" class="status-banner banner-PENDING" style="display:none;"></div>
-
-    <table class="data-table" id="txnTable">
-        <thead>
-        <tr>
-            <th>Date</th><th>Scheme</th><th>AMC</th><th>Category</th><th>Folio</th>
-            <th>Type</th><th class="left">Description</th>
-            <th>Units</th><th>NAV</th><th>Amount (₹)</th><th>Source</th>
-        </tr>
-        </thead>
-        <tbody></tbody>
-    </table>
+    <div id="txnMore" class="muted" style="text-align:center; padding:6px;"></div>
+    <div class="pagination" id="txnPager"></div>
     <div id="emptyNote" class="muted" style="display:none; padding:12px;">
         No transactions match this search.
     </div>

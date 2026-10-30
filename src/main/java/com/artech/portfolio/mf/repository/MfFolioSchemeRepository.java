@@ -21,6 +21,9 @@ public interface MfFolioSchemeRepository extends JpaRepository<MfFolioScheme, Lo
 
     List<MfFolioScheme> findByFolioId(Long folioId);
 
+    @Query("select s from MfFolioScheme s join fetch s.folioReference where s.folioId in :folioIds order by s.scheme")
+    List<MfFolioScheme> findByFolioIdInOrderByScheme(@Param("folioIds") Collection<Long> folioIds);
+
     @Modifying
     @Transactional
     @Query("delete from MfFolioScheme s where s.ownerPan = :pan")

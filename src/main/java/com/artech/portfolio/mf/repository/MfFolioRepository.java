@@ -14,6 +14,8 @@ public interface MfFolioRepository extends JpaRepository<MfFolio, Long> {
 
     List<MfFolio> findByOwnerPanOrderByFolioNo(String ownerPan);
 
+    List<MfFolio> findByOwnerPanAndAmcIdOrderByFolioNo(String ownerPan, Long amcId);
+
     @Modifying
     @Transactional
     @Query("delete from MfFolio f where f.ownerPan = :pan")

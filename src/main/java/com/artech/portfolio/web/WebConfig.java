@@ -56,6 +56,7 @@ public class WebConfig implements WebMvcConfigurer {
         registry.addViewController("/mutualfunds/mf-sip-form.html").setViewName("mutualfunds/mf-sip-form");
         registry.addViewController("/mutualfunds/mf-view.html").setViewName("mutualfunds/mf-view");
         registry.addViewController("/mutualfunds/mf-portfolio.html").setViewName("mutualfunds/mf-portfolio");
+        registry.addViewController("/mutualfunds/mf-portfolio-detail.html").setViewName("mutualfunds/mf-portfolio-detail");
         registry.addViewController("/mutualfunds/mf-portfolio-transactions.html")
                 .setViewName("mutualfunds/mf-portfolio-transactions");
         registry.addViewController("/mutualfunds/mf-import.html").setViewName("mutualfunds/mf-import");

@@ -15,6 +15,8 @@ public interface MfFolioSchemeValuationRepository extends JpaRepository<MfFolioS
 
     List<MfFolioSchemeValuation> findBySchemeIdIn(Collection<Long> schemeIds);
 
+    List<MfFolioSchemeValuation> findByOwnerPanAndSchemeIdIn(String ownerPan, Collection<Long> schemeIds);
+
     @Modifying
     @Transactional
     @Query("delete from MfFolioSchemeValuation v where v.ownerPan = :pan")

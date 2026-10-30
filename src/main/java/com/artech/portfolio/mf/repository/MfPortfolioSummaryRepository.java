@@ -15,6 +15,13 @@ public interface MfPortfolioSummaryRepository extends JpaRepository<MfPortfolioS
     @Query("select s from MfPortfolioSummary s left join fetch s.amcReference where s.ownerPan = :ownerPan order by s.amcId")
     List<MfPortfolioSummary> findByOwnerPanOrderByAmc(@Param("ownerPan") String ownerPan);
 
+    @Query("select s from MfPortfolioSummary s left join fetch s.amcReference where s.ownerPan = :ownerPan and s.amcId = :amcId and s.total = false")
+    List<MfPortfolioSummary> findHoldingsByOwnerAndAmc(@Param("ownerPan") String ownerPan,
+                                                        @Param("amcId") Long amcId);
+
+    @Query("select s from MfPortfolioSummary s where s.ownerPan = :ownerPan and s.total = true")
+    java.util.Optional<MfPortfolioSummary> findTotalByOwner(@Param("ownerPan") String ownerPan);
+
     @Modifying
     @Transactional
     @Query("delete from MfPortfolioSummary s where s.ownerPan = :pan")
