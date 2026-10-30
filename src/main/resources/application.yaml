@@ -1,5 +1,5 @@
 server:
-  port: 8082
+  port: 8081
 #  ssl:
 #    key-store: "file:/home/ubuntu/keystore.p12"
 #    key-store-type: "PKCS12"
