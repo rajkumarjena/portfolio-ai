@@ -149,6 +149,8 @@
      fetched by the pages themselves. -->
 <script th:inline="javascript">
     window.APP_USER_ROLE = /*[[${currentUser != null ? currentUser.role() : null}]]*/null;
+    // BOND_V11 #5: lets the Bond SIP multi-select pre-select the signed-in client.
+    window.APP_USER_PAN = /*[[${currentUser != null ? currentUser.pan() : null}]]*/null;
 </script>
 <script th:src="@{/js/csrf.js}"></script>
 <script th:src="@{/js/api.js}"></script>

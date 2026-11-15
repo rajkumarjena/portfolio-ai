@@ -24,4 +24,7 @@ public interface BondRepository extends JpaRepository<Bond, Long> {
      * status.
      */
     List<Bond> findByBondSipId(Long bondSipId);
+
+    /** BOND_V11 #7: one query for every SIP in a sync run, indexed per client-id + sip-id. */
+    List<Bond> findByBondSipIdIn(Collection<Long> bondSipIds);
 }

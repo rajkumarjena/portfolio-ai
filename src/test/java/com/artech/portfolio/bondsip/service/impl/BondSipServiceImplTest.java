@@ -110,6 +110,23 @@ class BondSipServiceImplTest {
                             .sorted(java.util.Comparator.comparing(BondSip::getSipDate))
                             .toList();
                 });
+        when(bondSipRepository.findByClientIdInOrderByIdAsc(any())).thenAnswer(inv -> {
+            java.util.Collection<Long> ids = inv.getArgument(0);
+            return sips.stream()
+                    .filter(s -> s.getClient() != null && ids.contains(s.getClient().getId()))
+                    .toList();
+        });
+        when(bondSipRepository.findByClientIdInAndStatusInAndSipDateLessThanEqualOrderBySipDateAsc(
+                any(), anyList(), any(LocalDate.class))).thenAnswer(inv -> {
+                    java.util.Collection<Long> ids = inv.getArgument(0);
+                    List<String> statuses = inv.getArgument(1);
+                    LocalDate until = inv.getArgument(2);
+                    return sips.stream()
+                            .filter(s -> s.getClient() != null && ids.contains(s.getClient().getId()))
+                            .filter(s -> statuses.contains(s.getStatus()))
+                            .filter(s -> s.getSipDate() != null && !s.getSipDate().isAfter(until))
+                            .toList();
+                });
 
         when(bondRepository.save(any(Bond.class))).thenAnswer(inv -> {
             Bond bond = inv.getArgument(0);
@@ -124,6 +141,12 @@ class BondSipServiceImplTest {
                 bonds.stream()
                         .filter(b -> Objects.equals(b.getBondSipId(), inv.getArgument(0)))
                         .toList());
+        when(bondRepository.findByBondSipIdIn(any())).thenAnswer(inv -> {
+            java.util.Collection<Long> sipIds = inv.getArgument(0);
+            return bonds.stream()
+                    .filter(b -> sipIds.contains(b.getBondSipId()))
+                    .toList();
+        });
 
         Clock clock = Clock.fixed(TUESDAY.atStartOfDay(ZoneId.systemDefault()).toInstant(),
                 ZoneId.systemDefault());
@@ -230,7 +253,8 @@ class BondSipServiceImplTest {
         assertEquals("SIP Investment", row.getInvestmentType(), "#4.b / #2 investment type");
         assertEquals(view.getId(), row.getBondSipId(), "linked to its Bond SIP");
         assertEquals("1", row.getIssuer(), "#4.b issuer resolves to the shared config id - same name on all screens");
-        assertEquals(TUESDAY, row.getInvestmentDate(), "#3/#4.b Investment Date carried over");
+        assertEquals(MONDAY, row.getInvestmentDate(),
+                "BOND_V12 #2/#3: Investment Date is this instalment's SIP Start Date");
         assertEquals(MONDAY, row.getInterestPaymentStartDate(), "#4.c SIP Date, weekend rolled");
         assertEquals(5000.0, row.getInvestmentAmountPerUnit(), "#4.d SIP Amount default");
         assertEquals("11", row.getCouponFrequency(), "#4.e Frequency maps to coupon-frequency config");
@@ -240,7 +264,25 @@ class BondSipServiceImplTest {
     }
 
     @Test
-    void runDueProcessesOnlyInProgressSips() {
+    void runDueRepairsAnInProgressSip() {
+        BondSip created = new BondSip();
+        created.setClient(owner);
+        created.setIssuer("HDFC Bank");
+        created.setInvestmentDate(TUESDAY);
+        created.setSipDate(MONDAY);
+        created.setSipAmount(1000.0);
+        created.setFrequency("MONTHLY");
+        created.setStatus("INPROGRESS");
+        bondSipRepository.save(created);
+
+        assertEquals(1, service.runDueSips());
+        assertEquals(1, bonds.size());
+    }
+
+    @Test
+    void runDueAlsoRepairsACreatedSip() {
+        // BOND_V11 #1: a SIP whose creation backfill was missed is repaired by
+        // the next sync instead of staying stuck in CREATED.
         BondSip created = new BondSip();
         created.setClient(owner);
         created.setIssuer("HDFC Bank");
@@ -251,13 +293,197 @@ class BondSipServiceImplTest {
         created.setStatus("CREATED");
         bondSipRepository.save(created);
 
-        assertEquals(0, service.runDueSips(), "#V8 #2: CREATED SIPs are not processed");
-        assertTrue(bonds.isEmpty());
-
-        created.setStatus("INPROGRESS");
-        bondSipRepository.save(created);
         assertEquals(1, service.runDueSips());
         assertEquals(1, bonds.size());
+        assertEquals("INPROGRESS", created.getStatus(), "a repaired SIP turns INPROGRESS");
+    }
+
+    // ------------------------------------------------ BOND_V11 #6 / #6.a periods
+
+    @Test
+    void executedPeriodIsNotRecreatedWhenTheClientMovedTheStartDate() {
+        BondSipView view = service.create(request("HDFC Bank", SATURDAY, 5000.0, "MONTHLY"));
+        assertEquals(1, bonds.size());
+
+        // #6.a: the client executed the record and set Interest Payment Start
+        // Date a day later - the October period is still accepted.
+        Bond executed = bonds.get(0);
+        executed.setInterestPaymentStartDate(TUESDAY);
+        executed.setStatus(BondConstants.STATUS_EXECUTED);
+
+        assertEquals(0, service.runDueSips(),
+                "#6: an accepted frequency period is never created twice");
+        assertEquals(1, bonds.size());
+        assertEquals(Boolean.TRUE, service.syncStatus().get("ok"));
+        assertEquals(view.getId(), executed.getBondSipId());
+    }
+
+    @Test
+    void aLaterPeriodsRecordDoesNotCoverAnEarlierMissingPeriod() {
+        BondSip sip = new BondSip();
+        sip.setClient(owner);
+        sip.setIssuer("SBI");
+        sip.setInvestmentDate(TUESDAY);
+        sip.setSipDate(LocalDate.of(2026, 9, 19));
+        sip.setSipAmount(1000.0);
+        sip.setFrequency("MONTHLY");
+        sip.setStatus("INPROGRESS");
+        bondSipRepository.save(sip);
+
+        // Only November's record exists; September and October are missing.
+        Bond november = new Bond();
+        november.setClient(owner);
+        november.setBondSipId(sip.getId());
+        november.setInvestmentType(BondConstants.INVESTMENT_TYPE_SIP);
+        november.setInterestPaymentStartDate(LocalDate.of(2026, 11, 19));
+        bondRepository.save(november);
+
+        assertEquals(2, service.runDueSips(), "#6: only the missing periods are created");
+        assertEquals(3, bonds.size());
+        assertEquals(0, service.runDueSips(), "second run is idempotent");
+    }
+
+    // ------------------------------------ BOND_V12 #3 #4 incremental SIP dates
+
+    /** A service whose 'today' is the given date. */
+    private BondSipServiceImpl serviceAt(LocalDate day) {
+        Clock clock = Clock.fixed(day.atStartOfDay(ZoneId.systemDefault()).toInstant(),
+                ZoneId.systemDefault());
+        return new BondSipServiceImpl(bondSipRepository, bondRepository,
+                appParamController, currentUserService, clock);
+    }
+
+    /** An existing SIP instalment row of the owned SIP. */
+    private Bond existingInstalment(Long sipId, LocalDate investmentDate, String investmentType) {
+        Bond bond = new Bond();
+        bond.setClient(owner);
+        bond.setBondSipId(sipId);
+        bond.setInvestmentDate(investmentDate);
+        bond.setInterestPaymentStartDate(investmentDate);
+        bond.setInvestmentType(investmentType);
+        bond.setStatus(BondConstants.STATUS_IN_PROGRESS);
+        return bondRepository.save(bond);
+    }
+
+    private BondSip pastMonthlySip(LocalDate start) {
+        BondSip sip = new BondSip();
+        sip.setClient(owner);
+        sip.setIssuer("HDFC Bank");
+        sip.setInvestmentDate(start);
+        sip.setSipDate(start);
+        sip.setSipAmount(5000.0);
+        sip.setFrequency("MONTHLY");
+        sip.setStatus("INPROGRESS");
+        return bondSipRepository.save(sip);
+    }
+
+    @Test
+    void monthlySipGeneratesIncrementalSipStartDates() {
+        // BOND_V12 #4.a/#4.b: SIP Start Date 2026-09-10, MONTHLY, today 2026-11-15.
+        BondSipServiceImpl november = serviceAt(LocalDate.of(2026, 11, 15));
+        BondSip sip = pastMonthlySip(LocalDate.of(2026, 9, 10));
+
+        assertEquals(3, november.reconcileForCurrentUser(), "#4.b three monthly instalments");
+        assertEquals(List.of(
+                        LocalDate.of(2026, 9, 10),
+                        LocalDate.of(2026, 10, 12),   // 10/11 Oct is a weekend -> Mon 12 Oct
+                        LocalDate.of(2026, 11, 10)),
+                bonds.stream().map(Bond::getInvestmentDate).sorted().toList());
+        assertTrue(bonds.stream().allMatch(b -> sip.getId().equals(b.getBondSipId())));
+        assertTrue(bonds.stream().allMatch(b -> BondConstants.INVESTMENT_TYPE_SIP.equals(b.getInvestmentType())));
+    }
+
+    @Test
+    void septemberRecordSkipsOnlyTheSeptemberPeriod() {
+        // #4.c: a record anywhere in September blocks September only.
+        BondSip sip = pastMonthlySip(LocalDate.of(2026, 9, 10));
+        existingInstalment(sip.getId(), LocalDate.of(2026, 9, 20), BondConstants.INVESTMENT_TYPE_SIP);
+
+        BondSipServiceImpl november = serviceAt(LocalDate.of(2026, 11, 15));
+        assertEquals(2, november.reconcileForCurrentUser());
+        assertEquals(List.of(LocalDate.of(2026, 10, 12), LocalDate.of(2026, 11, 10)),
+                bonds.stream()
+                        .filter(b -> b.getInvestmentDate().isAfter(LocalDate.of(2026, 9, 30)))
+                        .map(Bond::getInvestmentDate).sorted().toList());
+    }
+
+    @Test
+    void octoberRecordSkipsOnlyTheOctoberPeriod() {
+        // #4.d: a record anywhere in October blocks October only.
+        BondSip sip = pastMonthlySip(LocalDate.of(2026, 9, 10));
+        existingInstalment(sip.getId(), LocalDate.of(2026, 10, 15), BondConstants.INVESTMENT_TYPE_SIP);
+
+        BondSipServiceImpl november = serviceAt(LocalDate.of(2026, 11, 15));
+        assertEquals(2, november.reconcileForCurrentUser());
+        assertTrue(bonds.stream().anyMatch(b -> LocalDate.of(2026, 9, 10).equals(b.getInvestmentDate())));
+        assertTrue(bonds.stream().anyMatch(b -> LocalDate.of(2026, 11, 10).equals(b.getInvestmentDate())));
+        assertEquals(0, november.reconcileForCurrentUser(), "second run is idempotent");
+    }
+
+    @Test
+    void oneTimeInvestmentRowsNeverBlockASipPeriod() {
+        // #4.e: only SIP Investment rows are compared.
+        BondSip sip = pastMonthlySip(LocalDate.of(2026, 9, 10));
+        existingInstalment(sip.getId(), LocalDate.of(2026, 9, 15), BondConstants.INVESTMENT_TYPE_ONE_TIME);
+
+        BondSipServiceImpl november = serviceAt(LocalDate.of(2026, 11, 15));
+        assertEquals(3, november.reconcileForCurrentUser(), "a one time row blocks nothing");
+    }
+
+    @Test
+    void weeklySipSkipsOnlyTheWeekThatAlreadyHasARecord() {
+        // BOND_V12 #5: for WEEKLY the period is the week.
+        BondSip sip = new BondSip();
+        sip.setClient(owner);
+        sip.setIssuer("SBI");
+        sip.setSipDate(LocalDate.of(2026, 11, 2));
+        sip.setSipAmount(1000.0);
+        sip.setFrequency("WEEKLY");
+        sip.setStatus("INPROGRESS");
+        bondSipRepository.save(sip);
+        // week of 9 Nov already has a record on Wed 11 Nov
+        existingInstalment(sip.getId(), LocalDate.of(2026, 11, 11), BondConstants.INVESTMENT_TYPE_SIP);
+
+        BondSipServiceImpl november = serviceAt(LocalDate.of(2026, 11, 15));
+        assertEquals(1, november.reconcileForCurrentUser(), "only the 2 Nov week is missing");
+        assertTrue(bonds.stream().anyMatch(b -> LocalDate.of(2026, 11, 2).equals(b.getInvestmentDate())));
+    }
+
+    // ---------------------------------------------- BOND_V11 #2 #3 #4 ownership
+
+    @Test
+    void nonAdminSyncIgnoresOtherClientIds() {
+        BondSip strangerSip = new BondSip();
+        strangerSip.setClient(stranger);
+        strangerSip.setIssuer("SBI");
+        strangerSip.setSipDate(MONDAY);
+        strangerSip.setSipAmount(100.0);
+        strangerSip.setFrequency("MONTHLY");
+        strangerSip.setStatus("INPROGRESS");
+        bondSipRepository.save(strangerSip);
+
+        assertEquals(0, service.reconcileForCurrentUser(List.of(stranger.getId())),
+                "#2: a non-admin syncs his own SIPs only");
+        assertTrue(bonds.isEmpty());
+    }
+
+    @Test
+    void adminSyncsTheSelectedClients() {
+        when(currentUserService.isAdmin()).thenReturn(true);
+
+        BondSip strangerSip = new BondSip();
+        strangerSip.setClient(stranger);
+        strangerSip.setIssuer("SBI");
+        strangerSip.setSipDate(MONDAY);
+        strangerSip.setSipAmount(100.0);
+        strangerSip.setFrequency("MONTHLY");
+        strangerSip.setStatus("INPROGRESS");
+        bondSipRepository.save(strangerSip);
+
+        assertEquals(1, service.reconcileForCurrentUser(List.of(stranger.getId())),
+                "#4: an admin syncs the clients he selected");
+        assertEquals(stranger.getId(), bonds.get(0).getClient().getId());
+        assertEquals(strangerSip.getId(), bonds.get(0).getBondSipId());
     }
 
     @Test

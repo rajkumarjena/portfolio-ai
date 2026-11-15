@@ -1,0 +1,11 @@
+1. BOND sip is not executing OK, we need to restructure the flow in order to fix it.
+2. Ensure, any client(non-admin) can sync their bond SIPs but Admin client can Sync his or other's bond Sip
+3. Ensure any client(non-admin) can execute "Sync Now" button, the bond sip records will be created if its missing in bond table based on frequency.
+4. Ensure when Admin client execute "Sync Now", system will sync missing sip entries into bond table based on frequency as well as any client he selected from the drop-down client list. 
+5. Please modify client attribute in 'Bond Sip' page from drop-down with single select to multi-select option, so that Admin client can select any client including or excluding him for whom he wanted to sync bond sips recordds.
+6. Currently system is creating bond sip records from sip start date till today, however its not checking if any SIP records already converted to 'EXECUTED' from 'In Progress' for that frequency, please validate it and do the necessary change according to below rules
+    6.a. While client fill details in bond SIP record by editing it in View Bonds(Bond Records) page, client can modify SIP executed date which is start date of sip(Interest Payment Start Date), hence please check if any SIP record already present in Bond table with status 'EXECUTED' for that client-id and sip-id in that frequency which you are checking missing sips, if record present in bond table then dont create new sip record for that frequency, client-id and sip-id as client already accepted the SIP with all the detail filled for that bond sip frequency so check for next frequency of that sip-id and client id. only create sip records for missing frequency period for any client-id and sip-id
+7. In below code in BondSipServiceImpl.java class, you have only collecting existing sip dates, better add client-id, sip-id in it then loop for generating missing bond sip records by client ids.
+    private int generateDueInstalments(BondSip sip, LocalDate today) {
+        Set<LocalDate> existing = new HashSet<>();
+8. Please refresh 'Active Bonds' table in 'Bond Records' page upon user confirm the delete 'Active Bond' record.
