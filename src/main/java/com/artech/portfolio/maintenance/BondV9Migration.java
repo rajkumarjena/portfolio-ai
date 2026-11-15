@@ -99,6 +99,35 @@ public class BondV9Migration {
 
             // ---- 3. the Bond SIP Transaction table no longer exists (#4/#13)
             statement.execute("DROP TABLE IF EXISTS bond_sip_transaction");
+
+            // ---- 4. BOND_V12 #3: every Bond SIP instalment row carries its own
+            // incremental SIP Start Date as Investment Date (it used to repeat the
+            // SIP's investment date). One-shot - a marker row stops a later manual
+            // edit of the Investment Date from being overwritten on every restart.
+            statement.execute("CREATE TABLE IF NOT EXISTS app_data_migration (name TEXT PRIMARY KEY)");
+            if (!hasMigrationMarker(connection, "bond_v12_sip_start_date")) {
+                int updated = 0;
+                if (columns(connection, "bond").contains("investment_type")) {
+                    updated = statement.executeUpdate("UPDATE bond SET investment_date = interest_payment_start_date "
+                            + "WHERE bond_sip_id IS NOT NULL "
+                            + "AND investment_type = '" + BondConstants.INVESTMENT_TYPE_SIP + "' "
+                            + "AND interest_payment_start_date IS NOT NULL");
+                }
+                statement.executeUpdate("INSERT INTO app_data_migration (name) VALUES ('bond_v12_sip_start_date')");
+                log.info("BOND_V12 migration: set the incremental SIP Start Date on {} Bond SIP "
+                        + "instalment row(s)", updated);
+            }
+        }
+    }
+
+    /** True when a one-shot data migration has already been applied. */
+    private boolean hasMigrationMarker(Connection connection, String name) throws SQLException {
+        try (java.sql.PreparedStatement query = connection.prepareStatement(
+                "SELECT 1 FROM app_data_migration WHERE name = ?")) {
+            query.setString(1, name);
+            try (ResultSet rs = query.executeQuery()) {
+                return rs.next();
+            }
         }
     }
 

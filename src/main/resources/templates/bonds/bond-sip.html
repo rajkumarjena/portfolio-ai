@@ -36,8 +36,9 @@
                     <input type="date" id="investmentDate" name="investmentDate" disabled>
                 </div>
                 <div>
-                    <label>SIP Date *</label>
-                    <!-- Becomes the Interest Payment Start Date of each bond record (#4.c) -->
+                    <label>SIP Start Date *</label>
+                    <!-- BOND_V12 #2/#3: this is the actual investment date of every
+                         instalment record - it moves forward with the frequency. -->
                     <input type="date" id="sipDate" name="sipDate" required>
                 </div>
                 <div>
@@ -73,15 +74,19 @@
                 <ul class="plain-list">
                     <li>The Issuer drop-down lists the issuers configured in Application Parameter
                         Configuration (param name: issuer), refreshed from the App Config object
-                        every 15 minutes. SIP Date, SIP Amount and Frequency are mandatory;
+                        every 15 minutes. SIP Start Date, SIP Amount and Frequency are mandatory;
                         Investment Date is stamped to today (BONDBP_V9 #3).</li>
                     <li>Status starts as CREATED and is never editable (#3); it turns INPROGRESS
                         once the first instalment is generated.</li>
                     <li>On each due SIP date one <strong>bond record</strong> is created on the
-                        Bond Records screen: Issuer and Investment Date carried over, SIP Date as
-                        Interest Payment Start Date, SIP Amount as Investment Amount per Unit,
-                        Frequency as Coupon Frequency - everything else blank for you to complete
-                        (#4.b-#4.f). Weekend dates roll to the next weekday.</li>
+                        Bond Records screen with that instalment's own SIP Start Date as its
+                        Investment Date (and Interest Payment Start Date), the SIP Amount as
+                        Investment Amount per Unit and the Frequency as Coupon Frequency -
+                        everything else blank for you to complete (#4.b-#4.f, BOND_V12 #3).
+                        Weekend dates roll to the next weekday.</li>
+                    <li>A frequency period that already has a SIP Investment record for this SIP
+                        (any date of that month / week, in any status) is skipped, so a record you
+                        already completed is never created twice (BOND_V12 #4/#5).</li>
                     <li>Saving the completed details on the Bond Details Entry screen turns the
                         record from <em>In Progress</em> to <em>EXECUTED</em> (#4.h). The banner
                         above confirms when every due instalment is present.</li>
@@ -91,23 +96,24 @@
     </div>
 
     <h2>Bond SIPs</h2>
-    <div class="nav-buttons" style="justify-content: space-between; align-items: center; margin-top:0;">
-        <div th:if="${currentUser != null and currentUser.admin}">
-            <button type="button" id="syncBtn" class="btn"><i data-lucide="refresh-cw"></i>Sync Now</button>
-        </div>
-        <div id="sipClientFilterWrapper" style="display:none;">
-            <label for="sipFilterClients">Client:</label>
-            <select id="sipFilterClients">
-                <option value="me" selected>My SIPs</option>
-                <option value="all">All Clients</option>
-            </select>
-            <button class="btn" type="button" id="sipFilterBtn"><i data-lucide="filter"></i>Filter</button>
+    <!-- BOND_V11 #2/#3: Sync Now is available to every client - a regular client
+         syncs his own Bond SIPs, an ADMIN syncs the clients selected below.
+         BOND_V11 #5: the client picker is a multi-select so an ADMIN can include
+         or exclude himself and sync any combination of clients. -->
+    <div class="nav-buttons" style="justify-content: space-between; align-items: flex-start; margin-top:0;">
+        <button type="button" id="syncBtn" class="btn"><i data-lucide="refresh-cw"></i>Sync Now</button>
+        <div id="sipClientFilterWrapper" style="display:none; align-items:flex-start; gap:8px;">
+            <label for="sipFilterClients">Clients:</label>
+            <select id="sipFilterClients" multiple size="4"
+                    title="Ctrl/Cmd-click to select one or more clients"></select>
+            <span class="muted" style="font-size:12px; max-width:180px;">Ctrl/Cmd-click to select
+                multiple clients for the list and for Sync Now.</span>
         </div>
     </div>
     <table class="data-table" id="sipList">
         <thead>
         <tr>
-            <th>Issuer</th><th>Investment Date</th><th>SIP Date</th><th>SIP Amount</th>
+            <th>Issuer</th><th>Investment Date</th><th>SIP Start Date</th><th>SIP Amount</th>
             <th>Frequency</th><th>Status</th><th id="sipClientCol" style="display:none;">Client</th><th>Actions</th>
         </tr>
         </thead>

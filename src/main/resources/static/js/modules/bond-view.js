@@ -163,20 +163,24 @@
   window.editBond = id => { window.location.href = '/bonds/bond-form.html?id=' + id; };
   window.deleteBond = function deleteBond(id) {
     if (!canDelete) return;
-    if (!window.BondRecordsApi) return;
-    if (confirm('Are you sure you want to delete this bond?')) {
-      window.BondRecordsApi.del(id).then(changed => {
-        if (changed) { state.active = 1; loadSection('active'); }
+    if (!confirm('Are you sure you want to delete this bond?')) return;
+    // BOND_V11 #8: the delete answers 204 with no body, so the success path is
+    // the promise itself - reload Active Bonds (and the matured section) as
+    // soon as the user confirms and the server has deleted the record.
+    Api.del('/api/bonds/' + id)
+      .then(function () {
+        state.active = 1;
+        loadSection('active');
+        loadSection('expired');
+      })
+      .catch(function (err) {
+        Api.showError('Could not delete bond: ' + err.message);
       });
-    }
   };
 
-  // Exposed so deleteBond() can consult the cached row (client pan/status)
-  // without a second round-trip on every render.
+  // Exposed for other screens (the Bond Details Entry page) that delete a record.
   window.BondRecordsApi = {
-    feedback: msg => Api.feedback(msg),
-    del: id => Api.guard(Api.del('/api/bonds/' + id), 'Could not delete bond'),
-    findCached: id => cached[id]
+    del: id => Api.del('/api/bonds/' + id)
   };
 
   populateViewClientFilter();

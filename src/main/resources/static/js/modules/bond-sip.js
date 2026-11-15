@@ -1,4 +1,4 @@
-// bond-sip.js - BONDBP_V9/V10 Bond SIP screen
+// bond-sip.js - BONDBP_V9/V10 + BOND_V11 Bond SIP screen
 (function () {
   'use strict';
 
@@ -12,10 +12,12 @@
   const isAdmin = role === 'ADMIN';
   const isPrivileged = isAdmin || role === 'SUPERVISOR';
 
-  const HEADERS = ['Issuer', 'Investment Date', 'SIP Date', 'SIP Amount', 'Frequency', 'Status']
+  // BOND_V12 #2: the SIP date is the SIP Start Date shown on the screen.
+  const HEADERS = ['Issuer', 'Investment Date', 'SIP Start Date', 'SIP Amount', 'Frequency', 'Status']
     .concat(isPrivileged ? ['Client'] : []).concat(['Actions']);
 
-  let sipClientFilterId = '';
+  // BOND_V11 #5: the ids an ADMIN picked in the multi-select (empty = own SIPs).
+  let sipClientIds = [];
 
   function todayIso() {
     const d = new Date();
@@ -46,8 +48,18 @@
     el.classList.toggle('info', !!isSuccess);
   }
 
+  // BOND_V11 #4: the sync scope - the selected clients for an ADMIN, otherwise
+  // the signed-in client (the server ignores ids from a non-admin anyway).
+  function scopeQuery() {
+    return isPrivileged && sipClientIds.length
+      ? 'clientIds=' + encodeURIComponent(sipClientIds.join(','))
+      : '';
+  }
+
   function loadSyncStatus() {
-    return Api.guard(Api.get('/api/bond-sips/sync-status'), 'Could not read the sync status')
+    const query = scopeQuery();
+    return Api.guard(Api.get('/api/bond-sips/sync-status' + (query ? '?' + query : '')),
+      'Could not read the sync status')
       .then(function (status) {
         if (status) renderSyncStatus(status);
         return status;
@@ -70,32 +82,26 @@
     });
   }
 
-  let sipFilterMode = 'me';
-
   function load() {
-    let url = '/api/bond-sips';
-    if (sipFilterMode === 'all') {
-      url += '?all=true';
-    } else if (sipFilterMode && sipFilterMode !== 'me') {
-      url += '?clientId=' + encodeURIComponent(sipFilterMode);
-    }
-    Api.guard(Api.get(url), 'Could not load Bond SIPs').then(function (list) {
-      if (!list) return;
-      const head = document.querySelector('#sipList thead');
-      if (head) {
-        head.innerHTML = '<tr>' + HEADERS.map(h => '<th>' + h + '</th>').join('') + '</tr>';
-      }
-      const body = tbody();
-      if (!body) return;
-      if (!list.length) {
-        body.innerHTML = `<tr><td colspan="${HEADERS.length}" class="muted">No Bond SIPs yet - create one above.</td></tr>`;
-      } else {
-        body.innerHTML = list.map(s => {
-          const cancellable = s.status === 'CREATED' || s.status === 'INPROGRESS';
-          const clientCell = isPrivileged
-            ? `<td class="left">${esc((s.clientName || '') + (s.clientPan ? ' [' + s.clientPan + ']' : '')) || '-'}</td>`
-            : '';
-          return `
+    const query = scopeQuery();
+    Api.guard(Api.get('/api/bond-sips' + (query ? '?' + query : '')), 'Could not load Bond SIPs')
+      .then(function (list) {
+        if (!list) return;
+        const head = document.querySelector('#sipList thead');
+        if (head) {
+          head.innerHTML = '<tr>' + HEADERS.map(h => '<th>' + h + '</th>').join('') + '</tr>';
+        }
+        const body = tbody();
+        if (!body) return;
+        if (!list.length) {
+          body.innerHTML = `<tr><td colspan="${HEADERS.length}" class="muted">No Bond SIPs yet - create one above.</td></tr>`;
+        } else {
+          body.innerHTML = list.map(s => {
+            const cancellable = s.status === 'CREATED' || s.status === 'INPROGRESS';
+            const clientCell = isPrivileged
+              ? `<td class="left">${esc((s.clientName || '') + (s.clientPan ? ' [' + s.clientPan + ']' : '')) || '-'}</td>`
+              : '';
+            return `
         <tr data-id="${s.id}">
           <td>${esc(s.issuer)}</td>
           <td>${esc(s.investmentDate)}</td>
@@ -105,50 +111,76 @@
           <td><span class="chip">${esc(s.status)}</span></td>
           ${clientCell}
           <td class="left">${cancellable
-            ? '<button type="button" class="btn btn-sm sip-cancel"><i data-lucide="x"></i>Cancel</button>'
-            : ''}</td>
+              ? '<button type="button" class="btn btn-sm sip-cancel"><i data-lucide="x"></i>Cancel</button>'
+              : ''}</td>
         </tr>`;
-        }).join('');
-      }
-      if (window.App && window.App.renderIcons) window.App.renderIcons();
-    });
+          }).join('');
+        }
+        if (window.App && window.App.renderIcons) window.App.renderIcons();
+      });
+  }
+
+  function selectedClientIds() {
+    const select = document.getElementById('sipFilterClients');
+    if (!select) return [];
+    return Array.from(select.selectedOptions || [])
+      .map(option => option.value)
+      .filter(value => value != null && value !== '');
+  }
+
+  function applySelection() {
+    sipClientIds = selectedClientIds();
+    load();
+    loadSyncStatus();
   }
 
   function populateSipClientFilter() {
-    if (!isPrivileged) return;
     const wrapper = document.getElementById('sipClientFilterWrapper');
     const select = document.getElementById('sipFilterClients');
-    const btn = document.getElementById('sipFilterBtn');
     if (!wrapper || !select) return;
+    // BOND_V11 #2: only an ADMIN picks other clients; everyone else sees the
+    // Sync Now button with an implicit "my SIPs" scope.
+    if (!isPrivileged) return;
     Api.guard(Api.get('/api/clients'), 'Could not load clients').then(clients => {
       if (!clients) return;
-      // clear existing options except first two
-      while (select.options.length > 2) {
-        select.remove(2);
-      }
+      select.innerHTML = '';
       clients.forEach(c => {
         if (!c || c.id == null) return;
-        // skip if it's the current user? not necessary
         const option = document.createElement('option');
-        option.value = c.id;
+        option.value = String(c.id);
         option.textContent = (c.name || '') + (c.pan ? ' [' + c.pan + ']' : '');
+        // #5: pre-select the signed-in admin, who can add or remove anyone.
+        if (window.APP_USER_PAN && c.pan === window.APP_USER_PAN) {
+          option.selected = true;
+        }
         select.appendChild(option);
       });
       wrapper.style.display = 'flex';
-      wrapper.style.alignItems = 'center';
-      wrapper.style.gap = '6px';
-    });
-    if (btn) {
-      btn.onclick = function () {
-        const selectEl = document.getElementById('sipFilterClients');
-        sipFilterMode = selectEl && selectEl.value ? selectEl.value : 'me';
-        load();
-      };
-    }
-    select.onchange = function () {
-      sipFilterMode = select.value || 'me';
+      sipClientIds = selectedClientIds();
       load();
-    };
+      loadSyncStatus();
+      select.addEventListener('change', applySelection);
+    });
+  }
+
+  function syncNow() {
+    const btn = document.getElementById('syncBtn');
+    if (btn) btn.disabled = true;
+    banner('');
+    const payload = isPrivileged && sipClientIds.length ? { clientIds: sipClientIds } : {};
+    Api.guard(Api.post('/api/bond-sips/reconcile', payload), 'Sync failed')
+      .then(function (result) {
+        if (result) {
+          renderSyncStatus(result, result.ok);
+          if (result.created > 0) {
+            banner(result.created + ' missing instalment record(s) were created.', true);
+          } else {
+            banner('No missing instalment record - Bond Records is already up to date.', true);
+          }
+          load();
+        }
+        if (btn) btn.disabled = false;
+      });
   }
 
   document.addEventListener('DOMContentLoaded', function () {
@@ -202,27 +234,9 @@
       });
     }
 
+    // BOND_V11 #3: every client may run Sync Now for their own Bond SIPs.
     const syncBtn = document.getElementById('syncBtn');
-    if (syncBtn && !isAdmin) {
-      syncBtn.hidden = true;
-    }
-    if (syncBtn && isAdmin) {
-      syncBtn.addEventListener('click', function () {
-        syncBtn.disabled = true;
-        banner('');
-        Api.guard(Api.post('/api/bond-sips/reconcile', {}), 'Sync failed')
-          .then(function (result) {
-            if (result) {
-              renderSyncStatus(result, result.ok);
-              if (result.created > 0) {
-                banner(result.created + ' missing instalment record(s) were created.', true);
-              }
-              load();
-            }
-            syncBtn.disabled = false;
-          });
-      });
-    }
+    if (syncBtn) syncBtn.addEventListener('click', syncNow);
 
     if (window.App && window.App.renderIcons) window.App.renderIcons();
   });
