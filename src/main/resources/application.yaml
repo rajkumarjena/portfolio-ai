@@ -103,6 +103,11 @@ mf:
     tolerance-units-percent: 0.5
     tolerance-cost-percent: 0.5
     tolerance-market-percent: 0.5
+# MP_V1 Monthly Planner: how many months after the selected one the Cash-Flow
+# Report projects (1 = this month + next month, as the planner screen asks for).
+planner:
+  cashflow:
+    months-ahead: 1
 app:
   config:
     refreshRateDuration: PT15M

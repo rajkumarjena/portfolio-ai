@@ -80,6 +80,17 @@
                 </div>
             </details>
 
+            <!-- MP_V1 #2/#6: Monthly Planner - earnings, obligations and the
+                 cash-flow report, one tree group like every other module. -->
+            <details class="nav-tree">
+                <summary class="nav-tree-parent"><i data-lucide="wallet"></i>Monthly Planner</summary>
+                <div class="nav-tree-children">
+                    <a th:href="@{/planner/planner-earnings.html}" class="nav-link"><i data-lucide="wallet"></i>Earnings</a>
+                    <a th:href="@{/planner/planner-spending.html}" class="nav-link"><i data-lucide="receipt"></i>Spending (Obligations)</a>
+                    <a th:href="@{/planner/planner-cashflow.html}" class="nav-link"><i data-lucide="chart-no-axes-column"></i>Cash-Flow Report</a>
+                </div>
+            </details>
+
             <details class="nav-tree">
                 <summary class="nav-tree-parent"><i data-lucide="candlestick-chart"></i>Shares</summary>
                 <div class="nav-tree-children">

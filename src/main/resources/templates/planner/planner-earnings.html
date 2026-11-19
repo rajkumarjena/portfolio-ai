@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: page('Monthly Planner - Earnings', ~{:: #content}, ~{:: #scripts})}">
+<body>
+<!-- MP_V1 #2/#3: one screen for every earning category. A figure entered once
+     can repeat (checkbox + frequency); anything not entered is zero. -->
+<main id="content" th:fragment="content" class="content" data-planner-kind="EARNING">
+    <h1>Monthly Planner &mdash; Earnings</h1>
+    <p class="muted">Salary is normally entered once and repeated every month - tick
+        <strong>Repeat</strong> and it carries into the following months on its own. Every line has
+        a <strong>From</strong> date and, when it repeats, an <strong>Until</strong> month: the
+        repeat starts on that date, so a yearly entry dated 29 January is not counted in the
+        months before January, and it stops after its Until month. Both dates can be changed later
+        without retyping the amount. A weekly entry counts the weeks that actually fall in the
+        month (5 Mondays means 5 times the weekly figure). <strong>One time</strong> is a single dated
+        amount - a bonus, a refund, a sale - that is planned in the month of its own date and never
+        repeated. Freelance payouts and side-hustle incomes are typed in the month they are earned,
+        and anything no listed type covers goes under <strong>Miscellaneous</strong>; a month you do
+        not enter stays at zero.</p>
+
+    <div id="plannerBanner" class="status-banner" style="display:none;"></div>
+
+    <div class="nav-buttons" style="justify-content:flex-start; align-items:center; gap:8px; margin-top:0;">
+        <button type="button" class="btn" id="prevMonth" title="Previous month">&lsaquo;</button>
+        <input type="month" id="planMonth" title="Plan month">
+        <button type="button" class="btn" id="nextMonth" title="Next month">&rsaquo;</button>
+        <button type="button" class="btn primary" id="saveBtn"><i data-lucide="save"></i>Save month</button>
+        <span class="muted" id="monthLabel"></span>
+    </div>
+
+    <table class="data-table" id="plannerTable">
+        <thead>
+        <tr>
+            <th>Earning</th>
+            <th>Amount (&#8377;)</th>
+            <th>Repeat</th>
+            <th>Frequency</th>
+            <th>From</th>
+            <th>Until</th>
+            <th>Status</th>
+        </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <div class="cards" style="margin-top:16px;">
+        <div class="card">
+            <div class="muted">Planned earnings</div>
+            <div class="amt" id="kindTotal">0</div>
+        </div>
+    </div>
+
+    <div class="nav-buttons">
+        <a class="btn" href="/planner/planner-spending.html"><i data-lucide="receipt"></i>Spending (Obligations)</a>
+        <a class="btn" href="/planner/planner-cashflow.html"><i data-lucide="chart-no-axes-column"></i>Cash-Flow Report</a>
+        <a class="btn" href="/index.html"><i data-lucide="house"></i>Home</a>
+    </div>
+</main>
+
+<th:block id="scripts" th:fragment="scripts">
+    <script th:src="@{/js/modules/planner.js}"></script>
+</th:block>
+</body>
+</html>

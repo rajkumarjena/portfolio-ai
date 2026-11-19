@@ -361,6 +361,33 @@ tr.tone-grey   { background: var(--color-neutral-soft) !important; color: var(--
 
 .field { margin-bottom: var(--space-3); }
 
+/* ------------------------------------------------ planner credit cards ---- */
+.cc-card {
+    border-top: 1px solid rgba(20, 32, 48, 0.12);
+    padding: var(--space-3) 0;
+}
+
+.cc-card:first-child { border-top: none; }
+
+.cc-card-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+}
+
+.cc-card-actions { display: flex; gap: var(--space-1); }
+
+.cc-card-body {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: var(--space-4);
+    margin-top: var(--space-2);
+}
+
+.cc-card-body .field { margin-bottom: var(--space-2); }
+
 /* ---------------------------------------------------------- pagination ---- */
 .pagination { margin: var(--space-4) 0; text-align: center; }
 .pagination button { margin: 0 var(--space-1); }

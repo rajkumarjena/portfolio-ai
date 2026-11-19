@@ -62,5 +62,10 @@ public class WebConfig implements WebMvcConfigurer {
         registry.addViewController("/mutualfunds/mf-import.html").setViewName("mutualfunds/mf-import");
         registry.addViewController("/mutualfunds/mf-summary-import.html").setViewName("mutualfunds/mf-summary-import");
         registry.addViewController("/mutualfunds/mf-import-view.html").setViewName("mutualfunds/mf-import-view");
+
+        // MP_V1 #2/#6: Monthly Planner - earnings, spending and the cash-flow report.
+        registry.addViewController("/planner/planner-earnings.html").setViewName("planner/planner-earnings");
+        registry.addViewController("/planner/planner-spending.html").setViewName("planner/planner-spending");
+        registry.addViewController("/planner/planner-cashflow.html").setViewName("planner/planner-cashflow");
     }
 }
