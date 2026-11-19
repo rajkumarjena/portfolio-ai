@@ -109,6 +109,106 @@
     }
   }
 
+  // ------------------------------------------------- MP_V4 Monthly Planner --
+  // #4/#5: four figures per row (Self current / next, Family current / next).
+  // #6: the server has already merged every Miscellaneous row into one, and
+  // only rows with a positive amount somewhere are present. The page only
+  // formats the values it receives.
+  function plannerBody() {
+    return document.querySelector('#plannerWidgetTable tbody');
+  }
+
+  function plannerCells(row) {
+    return '<td class="amt">' + money(row.selfCurrent) + '</td>'
+      + '<td class="amt">' + money(row.selfNext) + '</td>'
+      + '<td class="amt family">' + money(row.familyCurrent) + '</td>'
+      + '<td class="amt family">' + money(row.familyNext) + '</td>';
+  }
+
+  function plannerRows(rows) {
+    return rows.map(row => `
+      <tr${row.misc ? ' class="widget-misc"' : ''}>
+        <td class="left"><span class="widget-label">${esc(row.label)}</span></td>
+        ${plannerCells(row)}
+      </tr>`).join('');
+  }
+
+  function plannerTotalRow(label, selfCurrent, selfNext, familyCurrent, familyNext) {
+    return `<tr class="widget-total">
+        <td class="left"><strong>${esc(label)}</strong></td>
+        <td class="amt"><strong>${money(selfCurrent)}</strong></td>
+        <td class="amt"><strong>${money(selfNext)}</strong></td>
+        <td class="amt family"><strong>${money(familyCurrent)}</strong></td>
+        <td class="amt family"><strong>${money(familyNext)}</strong></td>
+      </tr>`;
+  }
+
+  function plannerSection(title, rows, totalLabel, selfCurrent, selfNext,
+                          familyCurrent, familyNext, emptyText) {
+    return '<tr class="widget-section"><td colspan="5">' + esc(title) + '</td></tr>'
+      + (rows.length
+          ? plannerRows(rows)
+          : '<tr><td colspan="5" class="muted left">' + esc(emptyText) + '</td></tr>')
+      + plannerTotalRow(totalLabel, selfCurrent, selfNext, familyCurrent, familyNext);
+  }
+
+  function netCell(value, family) {
+    return '<td class="amt' + (family ? ' family' : '') + (value < 0 ? ' loss' : '') + '">'
+      + money(value) + '</td>';
+  }
+
+  function plannerNetRow(summary) {
+    return '<tr class="widget-net">'
+      + '<td class="left"><strong>Net</strong></td>'
+      + netCell(summary.selfNetCurrent, false)
+      + netCell(summary.selfNetNext, false)
+      + netCell(summary.familyNetCurrent, true)
+      + netCell(summary.familyNetNext, true)
+      + '</tr>';
+  }
+
+  function renderPlanner(summary) {
+    const body = plannerBody();
+    if (!body) return;
+    const earnings = summary.earnings || [];
+    const spending = summary.spending || [];
+
+    body.innerHTML = plannerSection('Earnings', earnings, 'Total Earnings',
+        summary.selfEarningsCurrent, summary.selfEarningsNext,
+        summary.familyEarningsCurrent, summary.familyEarningsNext,
+        'No earnings recorded for these months')
+      + plannerSection('Spending (Obligations)', spending, 'Total Spending',
+        summary.selfSpendingCurrent, summary.selfSpendingNext,
+        summary.familySpendingCurrent, summary.familySpendingNext,
+        'No spending recorded for these months')
+      + plannerNetRow(summary);
+
+    const foot = document.getElementById('plannerWidgetFoot');
+    if (foot) {
+      foot.textContent = 'As on ' + fmtDate(summary.asOf)
+        + ' · ' + summary.currentMonthLabel + ' / ' + summary.nextMonthLabel
+        + ' · Family = you + your family members';
+    }
+    if (window.App && window.App.renderIcons) window.App.renderIcons();
+  }
+
+  function renderPlannerMessage(message) {
+    const body = plannerBody();
+    if (body) {
+      body.innerHTML = `<tr><td colspan="5" class="muted">${esc(message)}</td></tr>`;
+    }
+  }
+
+  Api.guard(Api.get('/api/portfolio/summary/monthly-planner'),
+            'Could not load the Monthly Planner widget')
+    .then(function (summary) {
+      if (!summary) {
+        renderPlannerMessage('Summary unavailable');
+        return;
+      }
+      renderPlanner(summary);
+    });
+
   Api.guard(Api.get('/api/portfolio/summary/bonds'), 'Could not load the Bonds widget')
     .then(function (summary) {
       if (!summary) {

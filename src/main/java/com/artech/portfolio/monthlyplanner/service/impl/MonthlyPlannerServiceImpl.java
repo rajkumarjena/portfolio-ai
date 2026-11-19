@@ -124,6 +124,15 @@ public class MonthlyPlannerServiceImpl implements MonthlyPlannerService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public PlannerMonthView monthForClient(Long clientId, LocalDate month) {
+        LocalDate planMonth = firstOfMonth(month);
+        List<MonthlyPlanEntry> history = planRepository
+                .findByClientIdAndPlanMonthLessThanEqualOrderByPlanMonthAsc(clientId, planMonth);
+        return build(clientId, planMonth, history);
+    }
+
+    @Override
     @Transactional
     public List<PlannerMonthView> cashFlow(LocalDate month) {
         Client me = currentUserService.requireClient();

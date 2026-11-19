@@ -5,13 +5,47 @@
 <main id="content" th:fragment="content" class="content">
     <!-- BONDBP_V6 #2: the widget panel sits ON TOP of the screen, widgets
          arranged left to right; the existing dashboard screen stays exactly
-         as it is below it. #1: only the Bonds widget for now - the next
-         widgets (FD, Shares, Mutual Funds, ...) are appended to the right of
-         this card inside the same strip (#7). -->
+         as it is below it. MP_V4 #2: the Monthly Planner card is first in the
+         DOM (so it is the first thing on a small screen) and is ordered into
+         the middle of the strip on a wide screen. -->
     <section class="widget-panel" aria-label="Portfolio summary widgets">
+        <!-- MP_V4 #1/#4: Self and Family, current month and next month. It
+             uses the same card/table chrome as the Mutual Funds summary. -->
+        <article class="widget-card widget-card-wide widget-card-planner" tabindex="0"
+                 aria-label="Monthly Planner summary">
+            <header class="widget-head">
+                <span class="widget-icon"><i data-lucide="calendar-range"></i></span>
+                <div class="widget-titles">
+                    <h2>Monthly Planner</h2>
+                    <span class="widget-sub">Summary</span>
+                </div>
+            </header>
+            <div class="widget-scroll">
+            <table class="widget-table" id="plannerWidgetTable">
+                <thead>
+                <tr class="widget-group">
+                    <th rowspan="2">Monthly Planner</th>
+                    <th colspan="2">Self</th>
+                    <th colspan="2">Family</th>
+                </tr>
+                <tr>
+                    <th>Current Month</th>
+                    <th>Next Month</th>
+                    <th>Current Month</th>
+                    <th>Next Month</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr><td colspan="5" class="muted">Loading summary&hellip;</td></tr>
+                </tbody>
+            </table>
+            </div>
+            <footer class="widget-foot" id="plannerWidgetFoot"></footer>
+        </article>
+
         <!-- v6.1: tabindex makes the tile focusable so keyboard users get
              the same zoom (:focus-within mirrors :hover in components.css). -->
-        <article class="widget-card" tabindex="0">
+        <article class="widget-card widget-card-bonds" tabindex="0">
             <header class="widget-head">
                 <span class="widget-icon"><i data-lucide="landmark"></i></span>
                 <div class="widget-titles">
@@ -39,7 +73,7 @@
              same chrome, same hover / keyboard zoom (app.js) and the same
              server-computed figures, with the four columns of the sample sheet
              (#2): Investment and Market Value for Self and for Family. -->
-        <article class="widget-card widget-card-wide" tabindex="0">
+        <article class="widget-card widget-card-wide widget-card-mf" tabindex="0">
             <header class="widget-head">
                 <span class="widget-icon"><i data-lucide="briefcase"></i></span>
                 <div class="widget-titles">

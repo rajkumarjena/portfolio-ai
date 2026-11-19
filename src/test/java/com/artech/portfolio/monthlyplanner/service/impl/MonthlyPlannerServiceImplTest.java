@@ -99,11 +99,13 @@ class MonthlyPlannerServiceImplTest {
         });
         when(planRepository.findByClientIdAndPlanMonthOrderByCategoryAsc(anyLong(), any(LocalDate.class)))
                 .thenAnswer(inv -> entries.stream()
+                        .filter(row -> belongsTo(row, inv.getArgument(0)))
                         .filter(row -> Objects.equals(row.getPlanMonth(), inv.getArgument(1)))
                         .sorted(Comparator.comparing(MonthlyPlanEntry::getCategory))
                         .toList());
         when(planRepository.findByClientIdAndPlanMonthLessThanEqualOrderByPlanMonthAsc(
                 anyLong(), any(LocalDate.class))).thenAnswer(inv -> entries.stream()
+                        .filter(row -> belongsTo(row, inv.getArgument(0)))
                         .filter(row -> !row.getPlanMonth().isAfter(inv.getArgument(1)))
                         .sorted(Comparator.comparing(MonthlyPlanEntry::getPlanMonth))
                         .toList());
@@ -134,6 +136,10 @@ class MonthlyPlannerServiceImplTest {
     }
 
     // ------------------------------------------------------------- helpers
+
+    private static boolean belongsTo(MonthlyPlanEntry row, Long clientId) {
+        return row.getClient() != null && Objects.equals(row.getClient().getId(), clientId);
+    }
 
     private static PlannerLineView line(List<PlannerLineView> lines, String category) {
         return lines.stream().filter(l -> category.equals(l.getCategory())).findFirst().orElseThrow();
@@ -229,6 +235,28 @@ class MonthlyPlannerServiceImplTest {
 
         assertEquals(0.0, freelance.getAmount(), "#4: freelance must be entered every month");
         assertFalse(freelance.isInherited());
+    }
+
+    @Test
+    void monthForClientBuildsTheGivenClientsPlan() {
+        Client member = new Client();
+        member.setId(2L);
+        member.setName("Family Member");
+
+        MonthlyPlanEntry row = new MonthlyPlanEntry();
+        row.setClient(member);
+        row.setCategory(MonthlyPlannerConstants.SALARY);
+        row.setPlanMonth(NOVEMBER);
+        row.setAmount(51000);
+        row.setRecurring(false);
+        row.setFrequency(MonthlyPlannerConstants.FREQUENCY_ONE_TIME);
+        entries.add(row);
+
+        PlannerMonthView view = service.monthForClient(2L, NOVEMBER);
+
+        assertEquals(51000.0, line(view.getEarnings(), MonthlyPlannerConstants.SALARY).getAmount());
+        assertEquals(0.0, line(service.month(NOVEMBER).getEarnings(),
+                MonthlyPlannerConstants.SALARY).getAmount(), "the signed-in owner has no salary row");
     }
 
     @Test

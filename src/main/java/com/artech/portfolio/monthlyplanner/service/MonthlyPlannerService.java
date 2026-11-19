@@ -18,6 +18,13 @@ public interface MonthlyPlannerService {
     PlannerMonthView month(LocalDate month);
 
     /**
+     * Read-only build of one client's month, used by the dashboard summary for
+     * the signed-in client and each associated family member. The client id
+     * always comes from the session-derived scope; it is never a request value.
+     */
+    PlannerMonthView monthForClient(Long clientId, LocalDate month);
+
+    /**
      * MP_V1 #2: the Cash-Flow Report - the selected month plus the configured
      * number of following months, so the client can plan ahead.
      */
