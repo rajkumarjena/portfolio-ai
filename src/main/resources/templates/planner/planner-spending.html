@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: page('Monthly Planner - Spending', ~{:: #content}, ~{:: #scripts})}">
+<body>
+<!-- MP_V1 #2/#4/#5/#9: one screen for every obligation. Credit card, fuel, shares,
+     bonds, PPF, EPF/NPS, smallcase and Miscellaneous are typed in each month; the
+     Bond SIP and Mutual Fund SIP lines are auto-populated from their own screens,
+     and the Credit Card Bills line from the cards' own billing cycles. -->
+<main id="content" th:fragment="content" class="content" data-planner-kind="SPENDING">
+    <h1>Monthly Planner &mdash; Spending (Obligations)</h1>
+    <p class="muted">Credit card bills, fuel, shares, bonds, PPF, EPF/NPS and smallcase are entered
+        each month, and anything no listed type covers goes under <strong>Miscellaneous</strong>;
+        click its <strong>(Note)</strong> link to describe the source, or use
+        <strong>Add Miscellaneous</strong> for another Miscellaneous obligation with its own note.
+        <strong>Home Loan EMI</strong> is a regular monthly entry: tick <strong>Repeat</strong> and
+        set the <strong>Until</strong> month of the last EMI. Every line has a <strong>From</strong>
+        date, and <strong>One time</strong> is a single dated amount that is planned in its own
+        month only. A <strong>weekly</strong> line counts the weeks that fall in the month, so a
+        month with 5 Mondays costs 5 times the weekly figure. Bond SIP and Mutual Fund SIP are
+        filled in automatically from their own screens. <strong>Credit Card Bills</strong> comes
+        from the cards you save with <strong>Credit Cards</strong>: each card's expense is planned
+        in the month its billing cycle ends.</p>
+
+    <div id="plannerBanner" class="status-banner" style="display:none;"></div>
+
+    <div class="nav-buttons" style="justify-content:flex-start; align-items:center; gap:8px; margin-top:0;">
+        <button type="button" class="btn" id="prevMonth" title="Previous month">&lsaquo;</button>
+        <input type="month" id="planMonth" title="Plan month">
+        <button type="button" class="btn" id="nextMonth" title="Next month">&rsaquo;</button>
+        <button type="button" class="btn primary" id="saveBtn"><i data-lucide="save"></i>Save month</button>
+        <span class="muted" id="monthLabel"></span>
+    </div>
+
+    <div id="notesBanner" class="status-banner info" style="display:none;"></div>
+    <div class="nav-buttons" style="justify-content:flex-start; align-items:center; gap:8px; margin-top:0;">
+        <label class="muted" for="notesInput">Notes for selected row:</label>
+        <input type="text" id="notesInput" style="flex:1; min-width:200px;" placeholder="Select a row to add notes">
+    </div>
+
+    <table class="data-table" id="plannerTable">
+        <thead>
+        <tr>
+            <th>Obligation</th>
+            <th>Amount (&#8377;)</th>
+            <th>Repeat</th>
+            <th>Frequency</th>
+            <th>From</th>
+            <th>Until</th>
+            <th>Paid</th>
+        </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <div class="planner-actions">
+        <button type="button" class="btn" id="addMiscBtn"><i data-lucide="plus"></i>Add Miscellaneous</button>
+        <span class="muted">Add another Miscellaneous obligation with its own note.</span>
+    </div>
+
+    <div class="cards" style="margin-top:16px;">
+        <div class="card">
+            <div class="muted">Planned spending</div>
+            <div class="amt" id="kindTotal">0</div>
+        </div>
+    </div>
+
+    <div class="nav-buttons">
+        <a class="btn" href="/planner/planner-earnings.html"><i data-lucide="wallet"></i>Earnings</a>
+        <a class="btn" href="/planner/planner-cashflow.html"><i data-lucide="chart-no-axes-column"></i>Cash-Flow Report</a>
+        <a class="btn" href="/index.html"><i data-lucide="house"></i>Home</a>
+    </div>
+
+    <!-- MP_V3 #1: the (Note) link on a Miscellaneous row opens this text box. -->
+    <div class="modal-overlay" id="miscNoteModal">
+        <div class="modal">
+            <button type="button" class="close-x" id="miscNoteClose">&times;</button>
+            <h3>Miscellaneous note</h3>
+            <p class="muted">Describe the type or source of this Miscellaneous amount for future
+                reference.</p>
+            <label for="miscNoteText" style="width:auto;">Note</label>
+            <textarea id="miscNoteText" rows="6" placeholder="e.g. Gift, medical reimbursement, one-off repair..."></textarea>
+            <p class="muted">The note is saved with this month when you press
+                <strong>Save month</strong>.</p>
+            <div class="nav-buttons" style="margin-bottom:0;">
+                <button type="button" class="btn primary" id="miscNoteDone">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MPC_V1: every card, its billing cycle of the plan month, the cycle's bill
+         amount and the purchases captured in it. -->
+    <div class="modal-overlay" id="ccModal">
+        <div class="modal wide">
+            <button type="button" class="close-x" id="ccClose">&times;</button>
+            <h3>Credit Cards <span class="muted" id="ccMonthLabel"></span></h3>
+            <p class="muted">Each card's expense is planned in the month its billing cycle
+                <strong>ends</strong>. Enter the bill amount of every cycle; until a bill is entered
+                the purchases captured for the cycle are planned instead. Changing the billing-cycle
+                day moves the following cycles, so re-enter the current cycle's bill if it changes.</p>
+
+            <div id="ccBanner" class="status-banner" style="display:none;"></div>
+
+            <div class="filter-section">
+                <label id="ccCardFormTitle">Add a credit card</label>
+                <input type="text" id="ccName" maxlength="60" placeholder="Card name (e.g. HDFC Millennia)">
+                <select id="ccDay" title="The day each billing cycle ends on"></select>
+                <button type="button" class="btn primary" id="ccSaveCard">Add card</button>
+                <button type="button" class="btn" id="ccCancelCard" style="display:none;">Cancel</button>
+                <span class="muted">Total planned this month: <strong id="ccTotal">0</strong></span>
+            </div>
+
+            <div id="ccCards"></div>
+
+            <div class="nav-buttons">
+                <button type="button" class="btn" id="ccDone">Close</button>
+            </div>
+        </div>
+    </div>
+</main>
+
+<th:block id="scripts" th:fragment="scripts">
+    <script th:src="@{/js/modules/planner.js}"></script>
+    <script th:src="@{/js/modules/planner-creditcard.js}"></script>
+</th:block>
+</body>
+</html>

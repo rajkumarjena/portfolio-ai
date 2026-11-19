@@ -361,6 +361,33 @@ tr.tone-grey   { background: var(--color-neutral-soft) !important; color: var(--
 
 .field { margin-bottom: var(--space-3); }
 
+/* ------------------------------------------------ planner credit cards ---- */
+.cc-card {
+    border-top: 1px solid rgba(20, 32, 48, 0.12);
+    padding: var(--space-3) 0;
+}
+
+.cc-card:first-child { border-top: none; }
+
+.cc-card-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+}
+
+.cc-card-actions { display: flex; gap: var(--space-1); }
+
+.cc-card-body {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: var(--space-4);
+    margin-top: var(--space-2);
+}
+
+.cc-card-body .field { margin-bottom: var(--space-2); }
+
 /* ---------------------------------------------------------- pagination ---- */
 .pagination { margin: var(--space-4) 0; text-align: center; }
 .pagination button { margin: 0 var(--space-1); }
@@ -424,9 +451,16 @@ tr.tone-grey   { background: var(--color-neutral-soft) !important; color: var(--
 .widget-panel {
     display: flex;
     flex-wrap: wrap;
+    justify-content: center;
     gap: var(--space-4);
     margin-bottom: var(--space-5);
 }
+
+/* MP_V4 #2: the Monthly Planner is first in the DOM for small screens and is
+   ordered into the middle of the strip on a wide screen. */
+.widget-card-bonds { order: 1; }
+.widget-card-planner { order: 2; }
+.widget-card-mf { order: 3; }
 
 .widget-card {
     flex: 1 1 380px;
@@ -532,6 +566,32 @@ tr.tone-grey   { background: var(--color-neutral-soft) !important; color: var(--
    Self and in the Family column alike, so this rule comes after the accent. */
 .widget-table td.amt.loss { color: var(--color-fail); }
 
+/* MP_V4 #4/#6: section header, total and net rows of the Monthly Planner
+   Summary card. They use the same table chrome as the other widgets. */
+.widget-table tr.widget-section td {
+    padding: var(--space-1) var(--space-4);
+    text-align: left;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-primary);
+    background: var(--color-neutral-soft);
+}
+
+.widget-table tr.widget-total td {
+    font-weight: 700;
+    background: rgba(20, 32, 48, 0.04);
+    border-top: 2px solid var(--color-primary-soft);
+}
+
+.widget-table tr.widget-net td {
+    font-weight: 700;
+    background: var(--color-primary-soft);
+}
+
+.widget-table tr.widget-misc .widget-label { font-style: italic; }
+
 /* MFR_V11 #4: below the tile breakpoint the Mutual Funds table is wider than
    a phone-width card (four money columns), so it scrolls sideways instead of
    being clipped by the card. */
@@ -596,6 +656,14 @@ tr.tone-grey   { background: var(--color-neutral-soft) !important; color: var(--
         max-width: 400px;
     }
 
+    /* MP_V4 #2: a narrower wide card so Bonds + Monthly Planner + Mutual Funds
+       fit on one centered row at desktop width. */
+    .widget-card-planner {
+        flex: 0 1 calc(30% - 12px);
+        min-width: 300px;
+        max-width: 400px;
+    }
+
     .widget-card-wide .widget-label { white-space: normal; overflow: visible; text-overflow: clip; }
     .widget-card-wide .widget-range { white-space: normal; }
 
@@ -616,7 +684,19 @@ tr.tone-grey   { background: var(--color-neutral-soft) !important; color: var(--
     .widget-label { font-size: 7.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .widget-range { margin-top: 0; font-size: 7px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .widget-table td.amt { font-size: 7.5px; }
+    .widget-table tr.widget-section td { padding: 2px 3px; font-size: 7px; }
+    .widget-table tr.widget-total td,
+    .widget-table tr.widget-net td { font-size: 7.5px; }
     .widget-foot { padding: 2px var(--space-2); font-size: 7px; }
+}
+
+/* MP_V4 #2: on a laptop/mobile-width screen the Monthly Planner card comes
+   first, so the client sees the current and next month before the investment
+   widgets. The wide row above it is centered. */
+@media (max-width: 1280px) {
+    .widget-card-planner { order: 0; }
+    .widget-card-bonds { order: 1; }
+    .widget-card-mf { order: 2; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -789,3 +869,116 @@ input.investment-type.sip {
 /* #9: short status legend under the Bond Records heading. */
 .status-legend { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; margin: var(--space-2) 0 var(--space-3); }
 .status-legend .chip { font-size: var(--fs-small); }
+/* ------------------------------------------------ planner uniform rows (MP_V2 #4) ---- */
+#plannerTable input, #plannerTable select {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 34px;
+}
+#plannerTable td, #plannerTable th {
+    padding: 6px 8px;
+    height: 44px;
+    vertical-align: middle;
+}
+#plannerTable .planner-amount { width: 110px; }
+#plannerTable .planner-start { width: 130px; }
+#plannerTable .planner-end { width: 100px; }
+#plannerTable .planner-frequency { width: 130px; }
+#plannerTable .planner-paid { width: 20px; height: 20px; }
+
+/* ------------------------------------------------ planner responsive (MP_V2 #5) ---- */
+@media (max-width: 768px) {
+    #plannerTable, #cashFlowTable { font-size: 12px; }
+    #plannerTable th, #plannerTable td { padding: 4px 6px; height: auto; }
+    .nav-buttons { flex-wrap: wrap; }
+    .nav-buttons input[type="month"] { width: 100%; }
+    #notesBanner { font-size: 12px; }
+}
+@media (max-width: 480px) {
+    #plannerTable { display: block; overflow-x: auto; }
+}
+
+/* ------------------------------------------------ planner misc + mobile (MP_V3) ---- */
+.misc-note-link {
+    font-weight: 700;
+    text-decoration: underline;
+    white-space: nowrap;
+}
+
+#notesBanner { white-space: pre-line; }
+
+.planner-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    margin: 0 0 var(--space-4);
+}
+
+#miscNoteText {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    min-height: 130px;
+    margin-bottom: var(--space-3);
+}
+
+/* MP_V3 #4: on a phone the planner becomes a stack of labelled cards instead
+   of a wide table that has to be scrolled sideways. */
+@media (max-width: 768px) {
+    #plannerTable {
+        display: block;
+        overflow: visible;
+        background: transparent;
+        box-shadow: none;
+        border-radius: 0;
+    }
+
+    #plannerTable thead { display: none; }
+    #plannerTable tbody { display: block; }
+
+    #plannerTable tbody tr {
+        display: block;
+        background: var(--color-surface) !important;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        margin-bottom: var(--space-3);
+        padding: var(--space-2) var(--space-3);
+    }
+
+    #plannerTable tbody tr:nth-child(even),
+    #plannerTable tbody tr:hover { background: var(--color-surface) !important; }
+
+    #plannerTable td {
+        display: grid;
+        grid-template-columns: 105px minmax(0, 1fr);
+        gap: var(--space-2);
+        align-items: center;
+        text-align: left;
+        border: none;
+        border-bottom: 1px solid var(--color-border);
+        padding: 6px 0;
+        min-height: 0;
+        height: auto;
+    }
+
+    #plannerTable td:last-child { border-bottom: none; }
+
+    #plannerTable td::before {
+        content: attr(data-label);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+
+    #plannerTable td.amt { text-align: left; }
+    #plannerTable td[style*="display:none"],
+    #plannerTable td[style*="display: none"] { display: none !important; }
+    #plannerTable input, #plannerTable select { width: 100%; max-width: 100%; }
+
+    .planner-actions { flex-direction: column; align-items: stretch; }
+    .planner-actions .btn { justify-content: center; }
+}

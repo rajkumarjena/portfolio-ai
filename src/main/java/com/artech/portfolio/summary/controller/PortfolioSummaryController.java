@@ -2,6 +2,8 @@ package com.artech.portfolio.summary.controller;
 
 import com.artech.portfolio.summary.dto.BondWidgetView;
 import com.artech.portfolio.summary.dto.MfWidgetView;
+import com.artech.portfolio.summary.dto.MonthlyPlannerWidgetView;
+import com.artech.portfolio.summary.service.MonthlyPlannerSummaryService;
 import com.artech.portfolio.summary.service.PortfolioSummaryService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -14,18 +16,21 @@ import java.util.Map;
 
 /**
  * BONDBP_V6 #1/#2: the portfolio-summary widget strip on top of the dashboard.
- * Today only the Bonds card (#1); the endpoint is namespaced per widget so the
- * upcoming FD / Shares / Mutual Funds cards land as siblings, not as one
- * ever-growing payload.
+ * The strip currently holds the Bonds, Monthly Planner (MP_V4) and Mutual Funds
+ * cards; each card has its own sibling endpoint instead of one ever-growing
+ * payload.
  */
 @RestController
 @RequestMapping("/api/portfolio/summary")
 public class PortfolioSummaryController {
 
     private final PortfolioSummaryService portfolioSummaryService;
+    private final MonthlyPlannerSummaryService monthlyPlannerSummaryService;
 
-    public PortfolioSummaryController(PortfolioSummaryService portfolioSummaryService) {
+    public PortfolioSummaryController(PortfolioSummaryService portfolioSummaryService,
+                                      MonthlyPlannerSummaryService monthlyPlannerSummaryService) {
         this.portfolioSummaryService = portfolioSummaryService;
+        this.monthlyPlannerSummaryService = monthlyPlannerSummaryService;
     }
 
     /** The Bonds widget: rows + Self/Family figures, fully computed server-side (#6). */
@@ -42,6 +47,15 @@ public class PortfolioSummaryController {
     @GetMapping("/mutual-funds")
     public MfWidgetView mutualFunds() {
         return portfolioSummaryService.getMfWidget();
+    }
+
+    /**
+     * MP_V4: the Monthly Planner Summary - Self and Family, current and next
+     * month, with one aggregated Miscellaneous row per section.
+     */
+    @GetMapping("/monthly-planner")
+    public MonthlyPlannerWidgetView monthlyPlanner() {
+        return monthlyPlannerSummaryService.getMonthlyPlannerWidget();
     }
 
     /** Clean 401/400 with {"message": ...} instead of a container error page. */

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: page('Monthly Planner - Cash-Flow Report', ~{:: #content}, ~{:: #scripts})}">
+<body>
+<!-- MP_V1 #2: the plan side by side - the selected month and the following
+     month(s), so earnings and spending can be balanced before they happen. -->
+<main id="content" th:fragment="content" class="content" data-planner-report="true">
+    <h1>Monthly Planner &mdash; Cash-Flow Report</h1>
+    <p class="muted">Every earning and obligation of the selected month and the following month
+        (the second column is the projection from the recurring entries and the Bond SIP
+        schedule). Figures are maintained on the Earnings / Spending screens.</p>
+
+    <div id="plannerBanner" class="status-banner" style="display:none;"></div>
+    <div id="cashFlowStatuses"></div>
+
+    <div class="nav-buttons" style="justify-content:flex-start; align-items:center; gap:8px; margin-top:0;">
+        <button type="button" class="btn" id="prevMonth" title="Previous month">&lsaquo;</button>
+        <input type="month" id="planMonth" title="Report month">
+        <button type="button" class="btn" id="nextMonth" title="Next month">&rsaquo;</button>
+        <button type="button" class="btn" id="refreshBtn"><i data-lucide="refresh-cw"></i>Refresh</button>
+    </div>
+
+    <table class="data-table" id="cashFlowTable">
+        <thead id="cashFlowHead"></thead>
+        <tbody></tbody>
+    </table>
+
+    <div id="cashFlowStatusNote" style="margin-top:12px;"></div>
+
+    <div class="nav-buttons">
+        <a class="btn" href="/planner/planner-earnings.html"><i data-lucide="wallet"></i>Earnings</a>
+        <a class="btn" href="/planner/planner-spending.html"><i data-lucide="receipt"></i>Spending (Obligations)</a>
+        <a class="btn" href="/index.html"><i data-lucide="house"></i>Home</a>
+    </div>
+</main>
+
+<th:block id="scripts" th:fragment="scripts">
+    <script th:src="@{/js/modules/planner-cashflow.js}"></script>
+</th:block>
+</body>
+</html>
