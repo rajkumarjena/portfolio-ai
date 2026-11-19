@@ -54,6 +54,14 @@ public final class MonthlyPlannerConstants {
     /** MP_V1 #9: the catch-all expense for anything the defined types do not cover. */
     public static final String MISC_SPENDING = "MISC_SPENDING";
 
+    /**
+     * MP_V3 #2: a client may add several Miscellaneous rows in one month. The
+     * first one keeps the category constant above; every additional row stores
+     * a stable suffix after this separator ("MISC_EARNING#2"), so the existing
+     * one-row-per-category unique key still protects the ordinary categories.
+     */
+    public static final String MISC_SEPARATOR = "#";
+
     /** MP_V1 #2: every earning category, in screen order. */
     public static final Map<String, String> EARNINGS = immutable(Map.ofEntries(
             Map.entry(SALARY, "Salary"),
@@ -141,18 +149,41 @@ public final class MonthlyPlannerConstants {
     public static final int MONTHS_IN_HISTORY_WINDOW = 12;
 
     public static String kindOf(String category) {
-        if (EARNINGS.containsKey(category)) {
+        if (EARNINGS.containsKey(category) || isMisc(category, MISC_EARNING)) {
             return KIND_EARNING;
         }
-        if (SPENDING.containsKey(category)) {
+        if (SPENDING.containsKey(category) || isMisc(category, MISC_SPENDING)) {
             return KIND_SPENDING;
         }
         return null;
     }
 
     public static String labelOf(String category) {
+        if (isMiscCategory(category)) {
+            return "Miscellaneous";
+        }
         String label = EARNINGS.get(category);
         return label != null ? label : SPENDING.get(category);
+    }
+
+    /** MP_V3 #2: the base category for a kind's Miscellaneous rows. */
+    public static String miscBaseFor(String kind) {
+        return KIND_EARNING.equals(kind) ? MISC_EARNING : MISC_SPENDING;
+    }
+
+    /** True for the base Miscellaneous category and every additional row of it. */
+    public static boolean isMiscCategory(String category) {
+        return isMisc(category, MISC_EARNING) || isMisc(category, MISC_SPENDING);
+    }
+
+    /** True for the base category of {@code kind} and its additional rows. */
+    public static boolean isMiscCategory(String category, String kind) {
+        return isMisc(category, miscBaseFor(kind));
+    }
+
+    private static boolean isMisc(String category, String base) {
+        return category != null
+                && (category.equals(base) || category.startsWith(base + MISC_SEPARATOR));
     }
 
     public static List<String> categories(String kind) {

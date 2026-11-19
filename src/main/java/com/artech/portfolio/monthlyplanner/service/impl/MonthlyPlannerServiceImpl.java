@@ -34,11 +34,14 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * MP_V1 - Monthly Planner, all rules server-side:
@@ -157,25 +160,72 @@ public class MonthlyPlannerServiceImpl implements MonthlyPlannerService {
         view.setMonthLabel(month.format(MONTH_LABEL));
         view.getFrequencyOptions().putAll(MonthlyPlannerConstants.FREQUENCIES);
 
-        double earnings = 0;
         for (String category : MonthlyPlannerConstants.EARNINGS.keySet()) {
-            PlannerLineView line = line(category, MonthlyPlannerConstants.KIND_EARNING,
-                    month, upToMonth, explicit, autoAmounts.getOrDefault(category, 0.0));
-            view.getEarnings().add(line);
-            earnings += line.getAmount();
+            view.getEarnings().add(line(category, MonthlyPlannerConstants.KIND_EARNING,
+                    month, upToMonth, explicit, autoAmounts.getOrDefault(category, 0.0)));
         }
-        double spending = 0;
         for (String category : MonthlyPlannerConstants.SPENDING.keySet()) {
-            PlannerLineView line = line(category, MonthlyPlannerConstants.KIND_SPENDING,
-                    month, upToMonth, explicit, autoAmounts.getOrDefault(category, 0.0));
-            view.getSpending().add(line);
-            spending += line.getAmount();
+            view.getSpending().add(line(category, MonthlyPlannerConstants.KIND_SPENDING,
+                    month, upToMonth, explicit, autoAmounts.getOrDefault(category, 0.0)));
         }
+        // MP_V3 #2: append every extra Miscellaneous row saved for this month (or
+        // carried into it by its own repeat), then order the screen MP_V3 #3:
+        // ascending by label with the Miscellaneous rows last.
+        view.getEarnings().addAll(extraMiscLines(MonthlyPlannerConstants.KIND_EARNING,
+                month, upToMonth, explicit));
+        view.getSpending().addAll(extraMiscLines(MonthlyPlannerConstants.KIND_SPENDING,
+                month, upToMonth, explicit));
+        sortLines(view.getEarnings());
+        sortLines(view.getSpending());
+
+        double earnings = view.getEarnings().stream().mapToDouble(PlannerLineView::getAmount).sum();
+        double spending = view.getSpending().stream().mapToDouble(PlannerLineView::getAmount).sum();
 
         view.setEarningsTotal(round(earnings));
         view.setSpendingTotal(round(spending));
         view.setNet(round(earnings - spending));
         return view;
+    }
+
+    /**
+     * MP_V3 #2: every additional Miscellaneous row that belongs to the month.
+     * The base category is already in the constants map, so only suffixed rows
+     * are collected here. A row belongs when it is saved for this month, when
+     * its own repeat falls on this month, or when its one-time date is here.
+     */
+    private List<PlannerLineView> extraMiscLines(String kind, LocalDate month,
+                                                 List<MonthlyPlanEntry> upToMonth,
+                                                 Map<String, MonthlyPlanEntry> explicit) {
+        String base = MonthlyPlannerConstants.miscBaseFor(kind);
+        Set<String> categories = new LinkedHashSet<>();
+        for (MonthlyPlanEntry row : upToMonth) {
+            String category = row.getCategory();
+            if (category == null || !MonthlyPlannerConstants.isMiscCategory(category, kind)
+                    || base.equals(category)) {
+                continue;
+            }
+            boolean ownMonth = month.equals(row.getPlanMonth());
+            boolean oneTimeHere = MonthlyPlannerConstants.FREQUENCY_ONE_TIME
+                    .equals(MonthlyPlannerConstants.frequencyOr(row.getFrequency()))
+                    && month.equals(monthOf(startOf(row)));
+            if (ownMonth || oneTimeHere || (row.isRecurring() && appliesIn(row, month))) {
+                categories.add(category);
+            }
+        }
+        List<PlannerLineView> lines = new ArrayList<>();
+        for (String category : categories) {
+            lines.add(line(category, kind, month, upToMonth, explicit, 0.0));
+        }
+        return lines;
+    }
+
+    /** MP_V3 #3: labels ascending, every Miscellaneous row after the named ones. */
+    private static void sortLines(List<PlannerLineView> lines) {
+        lines.sort(Comparator
+                .comparing((PlannerLineView line) -> line.isMisc() ? 1 : 0)
+                .thenComparing(line -> line.getLabel() == null ? "" : line.getLabel(),
+                        String.CASE_INSENSITIVE_ORDER)
+                .thenComparing(line -> line.getCategory() == null ? "" : line.getCategory()));
     }
 
     /**
@@ -192,6 +242,7 @@ public class MonthlyPlannerServiceImpl implements MonthlyPlannerService {
         line.setCategory(category);
         line.setLabel(MonthlyPlannerConstants.labelOf(category));
         line.setKind(kind);
+        line.setMisc(MonthlyPlannerConstants.isMiscCategory(category));
         line.setFrequency(MonthlyPlannerConstants.FREQUENCY_DEFAULT);
         line.setEditable(true);
         line.setSourceLink(MonthlyPlannerConstants.SOURCE_LINKS.get(category));
@@ -586,7 +637,8 @@ public class MonthlyPlannerServiceImpl implements MonthlyPlannerService {
                     governing = upcoming(history, category, month);
                 }
                 if (governing != null
-                        && sameEffect(governing, amount, recurring, frequency, startDate, endDate, paid)) {
+                        && sameEffect(governing, amount, recurring, frequency, startDate, endDate,
+                        paid, entry.getNote())) {
                     continue;
                 }
                 if (governing == null && !recurring && amount == 0) {
@@ -712,13 +764,15 @@ public class MonthlyPlannerServiceImpl implements MonthlyPlannerService {
 
     /** Would storing this figure change what the governing entry already produces? */
     static boolean sameEffect(MonthlyPlanEntry row, double amount, boolean recurring,
-                              String frequency, LocalDate startDate, LocalDate endDate, boolean paid) {
+                              String frequency, LocalDate startDate, LocalDate endDate,
+                              boolean paid, String note) {
         return round(row.getAmount()) == round(amount)
                 && row.isRecurring() == recurring
                 && MonthlyPlannerConstants.frequencyOr(row.getFrequency()).equals(frequency)
                 && Objects.equals(startOf(row), startDate)
                 && Objects.equals(monthOf(row.getEndDate()), monthOf(endDate))
-                && row.isPaid() == paid;
+                && row.isPaid() == paid
+                && Objects.equals(row.getNote(), note);
     }
 
     // ---------------------------------------------------------------- helpers

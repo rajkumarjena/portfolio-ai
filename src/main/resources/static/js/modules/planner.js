@@ -108,6 +108,97 @@
     ).join('');
   }
 
+  function isMiscLine(line) {
+    if (line && line.misc) return true;
+    const category = String((line && line.category) || '');
+    return category === 'MISC_EARNING' || category.indexOf('MISC_EARNING#') === 0
+      || category === 'MISC_SPENDING' || category.indexOf('MISC_SPENDING#') === 0;
+  }
+
+  function labelHtml(line) {
+    return isMiscLine(line)
+      ? 'Miscellaneous<a href="#" class="misc-note-link" data-misc-note title="Add a note for this Miscellaneous amount">(Note)</a>'
+      : esc(line.label);
+  }
+
+  function rowHtml(line) {
+    const editable = line.editable !== false;
+    const disabled = editable ? '' : ' disabled';
+    const source = line.sourceLink === 'credit-cards'
+      ? ` <a class="muted" href="#" data-cc-open title="Maintain this figure on its own screen">open</a>`
+      : (line.sourceLink
+          ? ` <a class="muted" href="${esc(line.sourceLink)}" title="Maintain this figure on its own screen">open</a>`
+          : '');
+    const counted = line.counted !== false;
+    const occurrences = counted ? (Number(line.occurrences) || 1) : 0;
+    const paidChecked = line.paid ? ' checked' : '';
+    const paidCell = IS_SPENDING
+      ? `<td data-label="Paid"><input type="checkbox" class="planner-paid"${paidChecked} aria-label="${esc(line.label)} paid"></td>`
+      : '';
+    return `
+      <tr data-category="${esc(line.category)}" data-counted="${counted}"
+          data-occurrences="${occurrences}">
+        <td class="left" data-label="${IS_SPENDING ? 'Obligation' : 'Earning'}">${labelHtml(line)}${source}</td>
+        <td class="amt" data-label="Amount (\u20b9)"><input type="number" class="planner-amount" min="0" step="0.01"
+               value="${Number(line.entryAmount != null ? line.entryAmount : line.amount) || 0}"${disabled}
+               aria-label="${esc(line.label)} amount"></td>
+        <td data-label="Repeat"><input type="checkbox" class="planner-recurring"${line.recurring ? ' checked' : ''}${disabled}
+               aria-label="${esc(line.label)} repeats"></td>
+        <td data-label="Frequency"><select class="planner-frequency"${disabled}>${frequencyOptions(line.frequency)}</select></td>
+        <td data-label="From"><input type="date" class="planner-start" value="${dateValue(line.startDate)}"${disabled}
+               title="First date this earning or expense applies from"
+               aria-label="${esc(line.label)} starts on"></td>
+        <td data-label="Until"><input type="month" class="planner-end" value="${monthValue(line.endDate)}"${disabled}
+               title="Last month this repeat applies to - blank means open ended"
+               aria-label="${esc(line.label)} repeats until"></td>
+        ${paidCell}
+        <td style="display:none" aria-hidden="true"><textarea class="planner-note" hidden>${esc(line.note || '')}</textarea></td>
+      </tr>`;
+  }
+
+  function updateSelectedNote(value) {
+    if (!selectedRow) return;
+    const noteHidden = selectedRow.querySelector('.planner-note');
+    if (noteHidden) noteHidden.value = value;
+    const cat = selectedRow.getAttribute('data-category');
+    const line = lines().find(l => l.category === cat);
+    if (line) line.note = value;
+    const bannerEl = document.getElementById('notesBanner');
+    if (bannerEl && line) {
+      const text = (statusText(line) || '') + (value ? '  |  Notes: ' + value : '');
+      bannerEl.textContent = text;
+      bannerEl.style.display = text ? 'block' : 'none';
+    }
+    const noteInput = document.getElementById('notesInput');
+    if (noteInput && noteInput.value !== value) noteInput.value = value;
+    const textarea = document.getElementById('miscNoteText');
+    if (textarea && textarea.value !== value) textarea.value = value;
+  }
+
+  function bindRow(row) {
+    row.addEventListener('focusin', () => showNotes(row));
+    row.addEventListener('click', () => showNotes(row));
+    const input = row.querySelector('.planner-amount');
+    if (!input) return;
+    // amount input: auto-clear note when amount becomes 0 (MP_V2 #9, MISC comments)
+    input.addEventListener('input', function () {
+      const val = Number(input.value) || 0;
+      if (val === 0) {
+        const nh = row.querySelector('.planner-note');
+        if (nh) nh.value = '';
+        if (selectedRow === row) {
+          const line = lines().find(l => l.category === row.getAttribute('data-category'));
+          if (line) line.note = '';
+          const ni = document.getElementById('notesInput');
+          if (ni) ni.value = '';
+          const textarea = document.getElementById('miscNoteText');
+          if (textarea) textarea.value = '';
+        }
+      }
+      updateTotal();
+    });
+  }
+
   function showNotes(row) {
     const bannerEl = document.getElementById('notesBanner');
     const input = document.getElementById('notesInput');
@@ -127,81 +218,54 @@
     }
   }
 
+  function openMiscNote(row) {
+    const modal = document.getElementById('miscNoteModal');
+    const textarea = document.getElementById('miscNoteText');
+    if (!modal || !textarea || !row) return;
+    showNotes(row);
+    const hidden = row.querySelector('.planner-note');
+    textarea.value = hidden ? hidden.value : '';
+    modal.classList.add('open');
+    textarea.focus();
+  }
+
+  function closeMiscNote() {
+    const modal = document.getElementById('miscNoteModal');
+    if (modal) modal.classList.remove('open');
+  }
+
+  function addMisc() {
+    if (!view) return;
+    const base = IS_SPENDING ? 'MISC_SPENDING' : 'MISC_EARNING';
+    const line = {
+      category: base + '#new-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+      label: 'Miscellaneous', kind: KIND, amount: 0, entryAmount: 0,
+      frequency: 'MONTHLY', recurring: false, editable: true, auto: false,
+      inherited: false, startDate: view.month, endDate: null, counted: true,
+      occurrences: 1, sourceLink: null, note: '', paid: IS_SPENDING, misc: true
+    };
+    (IS_SPENDING ? view.spending : view.earnings).push(line);
+    tbody().insertAdjacentHTML('beforeend', rowHtml(line));
+    const row = tbody().lastElementChild;
+    if (!row) return;
+    bindRow(row);
+    syncFrequency(row);
+    updateTotal();
+    if (window.App && window.App.renderIcons) window.App.renderIcons();
+    row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    const amount = row.querySelector('.planner-amount');
+    if (amount) amount.focus();
+  }
+
   function render() {
     if (!view) return;
     document.getElementById('monthLabel').textContent = view.monthLabel || '';
     setMonth(view.month);
 
-    tbody().innerHTML = lines().map(line => {
-      const editable = line.editable !== false;
-      const disabled = editable ? '' : ' disabled';
-      const source = line.sourceLink === 'credit-cards'
-        ? ` <a class="muted" href="#" data-cc-open title="Maintain this figure on its own screen">open</a>`
-        : (line.sourceLink
-            ? ` <a class="muted" href="${esc(line.sourceLink)}" title="Maintain this figure on its own screen">open</a>`
-            : '');
-      const counted = line.counted !== false;
-      const occurrences = counted ? (Number(line.occurrences) || 1) : 0;
-      const paidChecked = line.paid ? ' checked' : '';
-      const paidDisabled = ''; // MP_V2: every paid checkbox stays enabled
-      const paidCell = IS_SPENDING
-        ? `<td><input type="checkbox" class="planner-paid"${paidChecked}${paidDisabled} aria-label="${esc(line.label)} paid"></td>`
-        : '';
-      return `
-        <tr data-category="${esc(line.category)}" data-counted="${counted}"
-            data-occurrences="${occurrences}">
-          <td class="left">${esc(line.label)}${source}</td>
-          <td class="amt"><input type="number" class="planner-amount" min="0" step="0.01"
-                 value="${Number(line.entryAmount != null ? line.entryAmount : line.amount) || 0}"${disabled}
-                 aria-label="${esc(line.label)} amount"></td>
-          <td><input type="checkbox" class="planner-recurring"${line.recurring ? ' checked' : ''}${disabled}
-                 aria-label="${esc(line.label)} repeats"></td>
-          <td><select class="planner-frequency"${disabled}>${frequencyOptions(line.frequency)}</select></td>
-          <td><input type="date" class="planner-start" value="${dateValue(line.startDate)}"${disabled}
-                 title="First date this earning or expense applies from"
-                 aria-label="${esc(line.label)} starts on"></td>
-          <td><input type="month" class="planner-end" value="${monthValue(line.endDate)}"${disabled}
-                 title="Last month this repeat applies to - blank means open ended"
-                 aria-label="${esc(line.label)} repeats until"></td>
-          ${paidCell}
-          <td style="display:none"><input type="hidden" class="planner-note" value="${esc(line.note || '')}"></td>
-        </tr>`;
-    }).join('');
-
-    tbody().querySelectorAll('tr').forEach(syncFrequency);
-
-    // notes banner binding
+    tbody().innerHTML = lines().map(rowHtml).join('');
     tbody().querySelectorAll('tr').forEach(row => {
-      row.addEventListener('focusin', () => showNotes(row));
-      row.addEventListener('click', () => showNotes(row));
-    });
-
-    const noteInput = document.getElementById('notesInput');
-    if (noteInput) {
-      noteInput.addEventListener('input', function () {
-        if (!selectedRow) return;
-        const noteHidden = selectedRow.querySelector('.planner-note');
-        if (noteHidden) noteHidden.value = noteInput.value;
-        // auto-clear handled on amount input
-      });
-    }
-
-    // amount input: auto-clear note when amount becomes 0 (MP_V2 #9, MISC comments)
-    tbody().querySelectorAll('.planner-amount').forEach(input => {
-      input.addEventListener('input', function () {
-        const row = input.closest('tr');
-        if (!row) return;
-        const val = Number(input.value) || 0;
-        if (val === 0) {
-          const nh = row.querySelector('.planner-note');
-          if (nh) nh.value = '';
-          if (selectedRow === row) {
-            const ni = document.getElementById('notesInput');
-            if (ni) ni.value = '';
-          }
-        }
-        updateTotal();
-      });
+      bindRow(row);
+      syncFrequency(row);
     });
 
     updateTotal();
@@ -290,6 +354,15 @@
     else if (window.openCreditCards) window.openCreditCards();
   });
 
+  // MP_V3 #1: the (Note) link on a Miscellaneous row -> its text box.
+  document.addEventListener('click', function (event) {
+    const link = event.target.closest('[data-misc-note]');
+    if (!link) return;
+    event.preventDefault();
+    const row = link.closest('tr');
+    if (row) openMiscNote(row);
+  });
+
   document.addEventListener('DOMContentLoaded', function () {
     const input = monthInput();
     if (input) {
@@ -310,6 +383,36 @@
         if (row && event.target.classList.contains('planner-frequency')) syncFrequency(row);
       });
     }
+
+    // The "Notes for selected row" box and the Miscellaneous text box edit the
+    // same hidden note, so either one can be used for any row.
+    const noteInput = document.getElementById('notesInput');
+    if (noteInput) {
+      noteInput.addEventListener('input', function () {
+        updateSelectedNote(noteInput.value);
+      });
+    }
+
+    const addMiscBtn = document.getElementById('addMiscBtn');
+    if (addMiscBtn) addMiscBtn.addEventListener('click', addMisc);
+
+    const miscNoteText = document.getElementById('miscNoteText');
+    if (miscNoteText) {
+      miscNoteText.addEventListener('input', function () {
+        updateSelectedNote(miscNoteText.value);
+      });
+    }
+    const miscNoteClose = document.getElementById('miscNoteClose');
+    if (miscNoteClose) miscNoteClose.addEventListener('click', closeMiscNote);
+    const miscNoteDone = document.getElementById('miscNoteDone');
+    if (miscNoteDone) miscNoteDone.addEventListener('click', closeMiscNote);
+    const miscNoteModal = document.getElementById('miscNoteModal');
+    if (miscNoteModal) {
+      miscNoteModal.addEventListener('click', function (event) {
+        if (event.target === miscNoteModal) closeMiscNote();
+      });
+    }
+
     document.addEventListener('planner:refresh', load);
 
     load();

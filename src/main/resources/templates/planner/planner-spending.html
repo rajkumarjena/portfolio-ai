@@ -9,7 +9,9 @@
 <main id="content" th:fragment="content" class="content" data-planner-kind="SPENDING">
     <h1>Monthly Planner &mdash; Spending (Obligations)</h1>
     <p class="muted">Credit card bills, fuel, shares, bonds, PPF, EPF/NPS and smallcase are entered
-        each month, and anything no listed type covers goes under <strong>Miscellaneous</strong>.
+        each month, and anything no listed type covers goes under <strong>Miscellaneous</strong>;
+        click its <strong>(Note)</strong> link to describe the source, or use
+        <strong>Add Miscellaneous</strong> for another Miscellaneous obligation with its own note.
         <strong>Home Loan EMI</strong> is a regular monthly entry: tick <strong>Repeat</strong> and
         set the <strong>Until</strong> month of the last EMI. Every line has a <strong>From</strong>
         date, and <strong>One time</strong> is a single dated amount that is planned in its own
@@ -50,6 +52,11 @@
         <tbody></tbody>
     </table>
 
+    <div class="planner-actions">
+        <button type="button" class="btn" id="addMiscBtn"><i data-lucide="plus"></i>Add Miscellaneous</button>
+        <span class="muted">Add another Miscellaneous obligation with its own note.</span>
+    </div>
+
     <div class="cards" style="margin-top:16px;">
         <div class="card">
             <div class="muted">Planned spending</div>
@@ -61,6 +68,23 @@
         <a class="btn" href="/planner/planner-earnings.html"><i data-lucide="wallet"></i>Earnings</a>
         <a class="btn" href="/planner/planner-cashflow.html"><i data-lucide="chart-no-axes-column"></i>Cash-Flow Report</a>
         <a class="btn" href="/index.html"><i data-lucide="house"></i>Home</a>
+    </div>
+
+    <!-- MP_V3 #1: the (Note) link on a Miscellaneous row opens this text box. -->
+    <div class="modal-overlay" id="miscNoteModal">
+        <div class="modal">
+            <button type="button" class="close-x" id="miscNoteClose">&times;</button>
+            <h3>Miscellaneous note</h3>
+            <p class="muted">Describe the type or source of this Miscellaneous amount for future
+                reference.</p>
+            <label for="miscNoteText" style="width:auto;">Note</label>
+            <textarea id="miscNoteText" rows="6" placeholder="e.g. Gift, medical reimbursement, one-off repair..."></textarea>
+            <p class="muted">The note is saved with this month when you press
+                <strong>Save month</strong>.</p>
+            <div class="nav-buttons" style="margin-bottom:0;">
+                <button type="button" class="btn primary" id="miscNoteDone">Done</button>
+            </div>
+        </div>
     </div>
 
     <!-- MPC_V1: every card, its billing cycle of the plan month, the cycle's bill

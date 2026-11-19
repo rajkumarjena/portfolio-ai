@@ -844,3 +844,88 @@ input.investment-type.sip {
 @media (max-width: 480px) {
     #plannerTable { display: block; overflow-x: auto; }
 }
+
+/* ------------------------------------------------ planner misc + mobile (MP_V3) ---- */
+.misc-note-link {
+    font-weight: 700;
+    text-decoration: underline;
+    white-space: nowrap;
+}
+
+#notesBanner { white-space: pre-line; }
+
+.planner-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    margin: 0 0 var(--space-4);
+}
+
+#miscNoteText {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    min-height: 130px;
+    margin-bottom: var(--space-3);
+}
+
+/* MP_V3 #4: on a phone the planner becomes a stack of labelled cards instead
+   of a wide table that has to be scrolled sideways. */
+@media (max-width: 768px) {
+    #plannerTable {
+        display: block;
+        overflow: visible;
+        background: transparent;
+        box-shadow: none;
+        border-radius: 0;
+    }
+
+    #plannerTable thead { display: none; }
+    #plannerTable tbody { display: block; }
+
+    #plannerTable tbody tr {
+        display: block;
+        background: var(--color-surface) !important;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        margin-bottom: var(--space-3);
+        padding: var(--space-2) var(--space-3);
+    }
+
+    #plannerTable tbody tr:nth-child(even),
+    #plannerTable tbody tr:hover { background: var(--color-surface) !important; }
+
+    #plannerTable td {
+        display: grid;
+        grid-template-columns: 105px minmax(0, 1fr);
+        gap: var(--space-2);
+        align-items: center;
+        text-align: left;
+        border: none;
+        border-bottom: 1px solid var(--color-border);
+        padding: 6px 0;
+        min-height: 0;
+        height: auto;
+    }
+
+    #plannerTable td:last-child { border-bottom: none; }
+
+    #plannerTable td::before {
+        content: attr(data-label);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+
+    #plannerTable td.amt { text-align: left; }
+    #plannerTable td[style*="display:none"],
+    #plannerTable td[style*="display: none"] { display: none !important; }
+    #plannerTable input, #plannerTable select { width: 100%; max-width: 100%; }
+
+    .planner-actions { flex-direction: column; align-items: stretch; }
+    .planner-actions .btn { justify-content: center; }
+}

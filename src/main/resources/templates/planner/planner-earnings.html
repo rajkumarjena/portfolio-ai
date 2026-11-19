@@ -15,8 +15,9 @@
         month (5 Mondays means 5 times the weekly figure). <strong>One time</strong> is a single dated
         amount - a bonus, a refund, a sale - that is planned in the month of its own date and never
         repeated. Freelance payouts and side-hustle incomes are typed in the month they are earned,
-        and anything no listed type covers goes under <strong>Miscellaneous</strong>; a month you do
-        not enter stays at zero.</p>
+        and anything no listed type covers goes under <strong>Miscellaneous</strong>; click its
+        <strong>(Note)</strong> link to describe the source, or use <strong>Add Miscellaneous</strong>
+        for another Miscellaneous amount with its own note. A month you do not enter stays at zero.</p>
 
     <div id="plannerBanner" class="status-banner" style="display:none;"></div>
 
@@ -48,6 +49,11 @@
         <tbody></tbody>
     </table>
 
+    <div class="planner-actions">
+        <button type="button" class="btn" id="addMiscBtn"><i data-lucide="plus"></i>Add Miscellaneous</button>
+        <span class="muted">Add another Miscellaneous income with its own note.</span>
+    </div>
+
     <div class="cards" style="margin-top:16px;">
         <div class="card">
             <div class="muted">Planned earnings</div>
@@ -59,6 +65,23 @@
         <a class="btn" href="/planner/planner-spending.html"><i data-lucide="receipt"></i>Spending (Obligations)</a>
         <a class="btn" href="/planner/planner-cashflow.html"><i data-lucide="chart-no-axes-column"></i>Cash-Flow Report</a>
         <a class="btn" href="/index.html"><i data-lucide="house"></i>Home</a>
+    </div>
+
+    <!-- MP_V3 #1: the (Note) link on a Miscellaneous row opens this text box. -->
+    <div class="modal-overlay" id="miscNoteModal">
+        <div class="modal">
+            <button type="button" class="close-x" id="miscNoteClose">&times;</button>
+            <h3>Miscellaneous note</h3>
+            <p class="muted">Describe the type or source of this Miscellaneous amount for future
+                reference.</p>
+            <label for="miscNoteText" style="width:auto;">Note</label>
+            <textarea id="miscNoteText" rows="6" placeholder="e.g. Gift, medical reimbursement, one-off repair..."></textarea>
+            <p class="muted">The note is saved with this month when you press
+                <strong>Save month</strong>.</p>
+            <div class="nav-buttons" style="margin-bottom:0;">
+                <button type="button" class="btn primary" id="miscNoteDone">Done</button>
+            </div>
+        </div>
     </div>
 </main>
 

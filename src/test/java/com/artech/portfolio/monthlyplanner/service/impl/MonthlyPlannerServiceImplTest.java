@@ -596,6 +596,46 @@ class MonthlyPlannerServiceImplTest {
         assertEquals(1500.0, view.getSpendingTotal());
     }
 
+    // ------------------------------------------------ MP_V3 multiple misc rows
+
+    @Test
+    void additionalMiscellaneousRowsAreSeparateSortedLastAndKeepTheirNote() {
+        save("2026-11", MonthlyPlannerConstants.MISC_EARNING, 4000, false,
+                MonthlyPlannerConstants.FREQUENCY_ONE_TIME, "2026-11-10", null);
+        save("2026-11", MonthlyPlannerConstants.MISC_SPENDING, 1500, false,
+                MonthlyPlannerConstants.FREQUENCY_MONTHLY);
+
+        PlannerEntryRequest extraEarning = new PlannerEntryRequest();
+        extraEarning.setCategory(MonthlyPlannerConstants.MISC_EARNING + "#2");
+        extraEarning.setAmount(2500.0);
+        extraEarning.setFrequency(MonthlyPlannerConstants.FREQUENCY_ONE_TIME);
+        extraEarning.setStartDate("2026-11-12");
+        extraEarning.setNote("Gift from uncle");
+        PlannerEntryRequest extraSpending = new PlannerEntryRequest();
+        extraSpending.setCategory(MonthlyPlannerConstants.MISC_SPENDING + "#2");
+        extraSpending.setAmount(700.0);
+        extraSpending.setFrequency(MonthlyPlannerConstants.FREQUENCY_MONTHLY);
+        SavePlannerRequest request = new SavePlannerRequest();
+        request.setMonth("2026-11");
+        request.setEntries(List.of(extraEarning, extraSpending));
+        service.save(request);
+
+        PlannerMonthView view = service.month(NOVEMBER);
+
+        assertEquals(2, view.getEarnings().stream().filter(PlannerLineView::isMisc).count());
+        assertEquals(2, view.getSpending().stream().filter(PlannerLineView::isMisc).count());
+        assertTrue(view.getEarnings().get(view.getEarnings().size() - 1).isMisc(),
+                "MP_V3 #3: Miscellaneous is the last earning row");
+        assertTrue(view.getSpending().get(view.getSpending().size() - 1).isMisc(),
+                "MP_V3 #3: Miscellaneous is the last obligation row");
+        assertEquals("Freelance Payouts", view.getEarnings().get(0).getLabel(),
+                "MP_V3 #3: named rows are in ascending label order");
+        assertEquals("Gift from uncle",
+                line(view.getEarnings(), MonthlyPlannerConstants.MISC_EARNING + "#2").getNote());
+        assertEquals(6500.0, view.getEarningsTotal(), "both misc earnings count");
+        assertEquals(2200.0, view.getSpendingTotal(), "both misc spending rows count");
+    }
+
     // -------------------------------------------- #9 credit card billing cycles
 
     @Test

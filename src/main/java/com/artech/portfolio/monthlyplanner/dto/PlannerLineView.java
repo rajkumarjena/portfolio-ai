@@ -36,6 +36,9 @@ public class PlannerLineView {
     private String sourceLink;
     private String note;
 
+    /** MP_V3 #2: a Miscellaneous row the client may duplicate with its own note. */
+    private boolean misc;
+
     /** MP_V2 #6: whether the spending bill/obligation has been paid. */
     private boolean paid;
 }

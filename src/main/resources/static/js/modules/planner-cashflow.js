@@ -34,13 +34,22 @@
 
   /** One block of category rows plus its total, one cell per month. */
   function section(title, linesKey, totalKey) {
-    const first = months[0] || {};
-    const lines = first[linesKey] || [];
+    // MP_V3 #2: months can carry a different number of extra Miscellaneous
+    // rows, so columns are aligned by category (not by array position).
+    const seen = new Set();
+    const lines = [];
+    months.forEach(function (month) {
+      (month[linesKey] || []).forEach(function (line) {
+        if (seen.has(line.category)) return;
+        seen.add(line.category);
+        lines.push(line);
+      });
+    });
     let html = `<tr><td class="left" colspan="${months.length + 1}"><strong>${esc(title)}</strong></td></tr>`;
-    lines.forEach(function (line, index) {
+    lines.forEach(function (line) {
       html += '<tr><td class="left">' + esc(line.label) + '</td>'
         + months.map(function (month) {
-            const row = (month[linesKey] || [])[index] || {};
+            const row = (month[linesKey] || []).find(r => r.category === line.category) || {};
             return '<td class="amt">' + money(row.amount) + '</td>';
           }).join('')
         + '</tr>';
