@@ -209,6 +209,10 @@ public class MonthlyPlannerServiceImpl implements MonthlyPlannerService {
                     + (line.getSourceLink() != null
                     ? " - adjust it on that screen."
                     : " - enter the bill of every billing cycle here."));
+            // MP_V2 #6: auto-populated rows default to unpaid until the user ticks
+            // them; an already stored paid flag (from a previous save) wins.
+            MonthlyPlanEntry storedPaid = explicit.get(category);
+            line.setPaid(storedPaid != null ? storedPaid.isPaid() : false);
             return line;
         }
 
@@ -244,6 +248,7 @@ public class MonthlyPlannerServiceImpl implements MonthlyPlannerService {
 
         line.setAmount(0);
         line.setEntryAmount(0);
+        line.setPaid(true); // MP_V2 #6: a zero amount is always considered paid.
         return line;
     }
 
@@ -260,6 +265,15 @@ public class MonthlyPlannerServiceImpl implements MonthlyPlannerService {
         line.setStartDate(start);
         line.setEndDate(row.getEndDate());
         line.setNote(row.getNote());
+        // MP_V2 #6: paid is tracked per month. A carried-over row belongs to an
+        // earlier month, so the current month starts unpaid unless it is its own
+        // row or the amount is zero (which is always considered paid).
+        boolean ownMonth = row.getPlanMonth() != null && row.getPlanMonth().equals(month);
+        boolean paid = ownMonth ? row.isPaid() : (line.getAmount() == 0);
+        if (line.getAmount() == 0) {
+            paid = true;
+        }
+        line.setPaid(paid);
         return line;
     }
 
@@ -526,11 +540,20 @@ public class MonthlyPlannerServiceImpl implements MonthlyPlannerService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "Unknown planner category: " + entry.getCategory());
             }
-            // MP_V1 #5: the SIP-backed lines are maintained on their own screen.
-            if (autoAmounts.containsKey(category)) {
+            boolean auto = autoAmounts.containsKey(category);
+            // MP_V1 #5: SIP/credit-card lines are maintained on their own screen.
+            // When the client does not express a paid preference (paid == null),
+            // leave them untouched so their figure is never overwritten.
+            if (auto && entry.getPaid() == null) {
                 continue;
             }
             double amount = entry.getAmount() == null ? 0 : entry.getAmount();
+            if (auto) {
+                amount = autoAmounts.get(category);
+            }
+            // MP_V2 #6: a zero amount is always considered paid.
+            boolean paid = amount == 0 ? true
+                    : (entry.getPaid() == null ? false : entry.getPaid());
             if (amount < 0) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "Amount cannot be negative for " + MonthlyPlannerConstants.labelOf(category));
@@ -563,7 +586,7 @@ public class MonthlyPlannerServiceImpl implements MonthlyPlannerService {
                     governing = upcoming(history, category, month);
                 }
                 if (governing != null
-                        && sameEffect(governing, amount, recurring, frequency, startDate, endDate)) {
+                        && sameEffect(governing, amount, recurring, frequency, startDate, endDate, paid)) {
                     continue;
                 }
                 if (governing == null && !recurring && amount == 0) {
@@ -582,6 +605,7 @@ public class MonthlyPlannerServiceImpl implements MonthlyPlannerService {
             row.setEndDate(oneTime ? startDate : (recurring ? endDate : null));
             row.setSource(MonthlyPlannerConstants.SOURCE_MANUAL);
             row.setNote(entry.getNote());
+            row.setPaid(paid);
             planRepository.save(row);
         }
 
@@ -651,6 +675,7 @@ public class MonthlyPlannerServiceImpl implements MonthlyPlannerService {
             row.setOccurrences(line.getOccurrences());
             row.setFrequency(line.getFrequency());
             row.setRecurring(line.isRecurring());
+            row.setPaid(line.isPaid());
             row.setSource(line.isAuto() ? MonthlyPlannerConstants.SOURCE_AUTO
                     : MonthlyPlannerConstants.SOURCE_MANUAL);
             row.setCapturedAt(LocalDateTime.now(clock));
@@ -664,7 +689,8 @@ public class MonthlyPlannerServiceImpl implements MonthlyPlannerService {
                 && round(row.getEntryAmount()) == round(line.getEntryAmount())
                 && row.getOccurrences() == line.getOccurrences()
                 && Objects.equals(row.getFrequency(), line.getFrequency())
-                && row.isRecurring() == line.isRecurring();
+                && row.isRecurring() == line.isRecurring()
+                && row.isPaid() == line.isPaid();
     }
 
     private static PlannerHistoryRowView historyView(MonthlyPlanHistory row) {
@@ -679,18 +705,20 @@ public class MonthlyPlannerServiceImpl implements MonthlyPlannerService {
         view.setOccurrences(row.getOccurrences());
         view.setFrequency(row.getFrequency());
         view.setRecurring(row.isRecurring());
+        view.setPaid(row.isPaid());
         view.setSource(row.getSource());
         return view;
     }
 
     /** Would storing this figure change what the governing entry already produces? */
     static boolean sameEffect(MonthlyPlanEntry row, double amount, boolean recurring,
-                              String frequency, LocalDate startDate, LocalDate endDate) {
+                              String frequency, LocalDate startDate, LocalDate endDate, boolean paid) {
         return round(row.getAmount()) == round(amount)
                 && row.isRecurring() == recurring
                 && MonthlyPlannerConstants.frequencyOr(row.getFrequency()).equals(frequency)
                 && Objects.equals(startOf(row), startDate)
-                && Objects.equals(monthOf(row.getEndDate()), monthOf(endDate));
+                && Objects.equals(monthOf(row.getEndDate()), monthOf(endDate))
+                && row.isPaid() == paid;
     }
 
     // ---------------------------------------------------------------- helpers

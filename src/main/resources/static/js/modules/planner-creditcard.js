@@ -215,16 +215,26 @@
   }
 
   function saveBill(id, button) {
-    const block = button.closest('.cc-card');
-    const amount = Number(block.querySelector('.cc-bill').value) || 0;
-    const cycleEnd = button.getAttribute('data-cycle-end');
-    button.disabled = true;
-    Api.guard(Api.put('/api/credit-cards/' + id + '/bills?month=' + encodeURIComponent(monthValue()),
-      { cycleEnd: cycleEnd, amount: amount }), 'Could not save the bill')
-      .then(function (result) {
-        button.disabled = false;
-        apply(result);
-      });
+    // MP_V2: saving one bill saves every card's bill on the screen.
+    const cards = Array.from(document.querySelectorAll('.cc-card'));
+    if (button) button.disabled = true;
+    const requests = cards.map(function (block) {
+      const saveBtn = block.querySelector('[data-cc-save-bill]');
+      const cardId = saveBtn ? saveBtn.getAttribute('data-cc-save-bill') : null;
+      if (!cardId) return Promise.resolve(null);
+      const amount = Number(block.querySelector('.cc-bill').value) || 0;
+      const cycleEnd = saveBtn.getAttribute('data-cycle-end');
+      return Api.put('/api/credit-cards/' + cardId + '/bills?month=' + encodeURIComponent(monthValue()),
+        { cycleEnd: cycleEnd, amount: amount });
+    });
+    Promise.all(requests).then(function (results) {
+      if (button) button.disabled = false;
+      const last = results.filter(Boolean).pop();
+      apply(last || view);
+    }).catch(function () {
+      if (button) button.disabled = false;
+      banner('Could not save the bills.', false);
+    });
   }
 
   function addPurchase(id, button) {
@@ -274,6 +284,9 @@
     }
     if (button.id === 'ccClose' || button.id === 'ccDone') return closeModal();
   }
+
+  // Expose the opener so the planner's "open" link can trigger the popup.
+  window.openCreditCards = openModal;
 
   function init() {
     overlay = el('ccModal');

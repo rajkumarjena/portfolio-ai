@@ -816,3 +816,31 @@ input.investment-type.sip {
 /* #9: short status legend under the Bond Records heading. */
 .status-legend { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; margin: var(--space-2) 0 var(--space-3); }
 .status-legend .chip { font-size: var(--fs-small); }
+/* ------------------------------------------------ planner uniform rows (MP_V2 #4) ---- */
+#plannerTable input, #plannerTable select {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 34px;
+}
+#plannerTable td, #plannerTable th {
+    padding: 6px 8px;
+    height: 44px;
+    vertical-align: middle;
+}
+#plannerTable .planner-amount { width: 110px; }
+#plannerTable .planner-start { width: 130px; }
+#plannerTable .planner-end { width: 100px; }
+#plannerTable .planner-frequency { width: 130px; }
+#plannerTable .planner-paid { width: 20px; height: 20px; }
+
+/* ------------------------------------------------ planner responsive (MP_V2 #5) ---- */
+@media (max-width: 768px) {
+    #plannerTable, #cashFlowTable { font-size: 12px; }
+    #plannerTable th, #plannerTable td { padding: 4px 6px; height: auto; }
+    .nav-buttons { flex-wrap: wrap; }
+    .nav-buttons input[type="month"] { width: 100%; }
+    #notesBanner { font-size: 12px; }
+}
+@media (max-width: 480px) {
+    #plannerTable { display: block; overflow-x: auto; }
+}

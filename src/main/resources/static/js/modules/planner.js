@@ -7,12 +7,14 @@
 
   const content = document.getElementById('content');
   const KIND = (content && content.dataset && content.dataset.plannerKind) || 'EARNING';
+  const IS_SPENDING = KIND === 'SPENDING';
 
   let view = null;
+  let selectedRow = null;
 
   const esc = value => String(value == null ? '' : value)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/\"/g, '&quot;');
+    .replace(/"/g, '&quot;');
 
   const money = n => (Number(n) || 0).toLocaleString('en-IN', {
     minimumFractionDigits: 2, maximumFractionDigits: 2
@@ -83,12 +85,10 @@
     return 'This month only' + weekly;
   }
 
-  /** "2026-11-01" -> "2026-11" for the month input; anything else stays blank. */
   function monthValue(isoDate) {
     return isoDate ? String(isoDate).slice(0, 7) : '';
   }
 
-  /** "2026-01-29" -> "29 January 2026" for the "From" input. */
   function dateValue(isoDate) {
     return isoDate ? String(isoDate).slice(0, 10) : '';
   }
@@ -108,6 +108,25 @@
     ).join('');
   }
 
+  function showNotes(row) {
+    const bannerEl = document.getElementById('notesBanner');
+    const input = document.getElementById('notesInput');
+    if (!row) return;
+    selectedRow = row;
+    const cat = row.getAttribute('data-category');
+    const line = lines().find(l => l.category === cat);
+    if (!line) return;
+    const text = (statusText(line) || '') + (line.note ? '  |  Notes: ' + line.note : '');
+    if (bannerEl) {
+      bannerEl.textContent = text;
+      bannerEl.style.display = text ? 'block' : 'none';
+    }
+    if (input) {
+      input.value = line.note || '';
+      input.disabled = false;
+    }
+  }
+
   function render() {
     if (!view) return;
     document.getElementById('monthLabel').textContent = view.monthLabel || '';
@@ -116,13 +135,18 @@
     tbody().innerHTML = lines().map(line => {
       const editable = line.editable !== false;
       const disabled = editable ? '' : ' disabled';
-      const source = line.sourceLink
-        ? ` <a class="muted" href="${esc(line.sourceLink)}" title="Maintain this figure on its own screen">open</a>`
-        : '';
-      // The month's total uses the server's count: a weekly figure covers the
-      // month's own weekdays, and an entry that starts later is not counted yet.
+      const source = line.sourceLink === 'credit-cards'
+        ? ` <a class="muted" href="#" data-cc-open title="Maintain this figure on its own screen">open</a>`
+        : (line.sourceLink
+            ? ` <a class="muted" href="${esc(line.sourceLink)}" title="Maintain this figure on its own screen">open</a>`
+            : '');
       const counted = line.counted !== false;
       const occurrences = counted ? (Number(line.occurrences) || 1) : 0;
+      const paidChecked = line.paid ? ' checked' : '';
+      const paidDisabled = ''; // MP_V2: every paid checkbox stays enabled
+      const paidCell = IS_SPENDING
+        ? `<td><input type="checkbox" class="planner-paid"${paidChecked}${paidDisabled} aria-label="${esc(line.label)} paid"></td>`
+        : '';
       return `
         <tr data-category="${esc(line.category)}" data-counted="${counted}"
             data-occurrences="${occurrences}">
@@ -139,19 +163,51 @@
           <td><input type="month" class="planner-end" value="${monthValue(line.endDate)}"${disabled}
                  title="Last month this repeat applies to - blank means open ended"
                  aria-label="${esc(line.label)} repeats until"></td>
-          <td class="muted left">${esc(statusText(line))}${line.note ? '<div>' + esc(line.note) + '</div>' : ''}</td>
+          ${paidCell}
+          <td style="display:none"><input type="hidden" class="planner-note" value="${esc(line.note || '')}"></td>
         </tr>`;
     }).join('');
 
     tbody().querySelectorAll('tr').forEach(syncFrequency);
+
+    // notes banner binding
+    tbody().querySelectorAll('tr').forEach(row => {
+      row.addEventListener('focusin', () => showNotes(row));
+      row.addEventListener('click', () => showNotes(row));
+    });
+
+    const noteInput = document.getElementById('notesInput');
+    if (noteInput) {
+      noteInput.addEventListener('input', function () {
+        if (!selectedRow) return;
+        const noteHidden = selectedRow.querySelector('.planner-note');
+        if (noteHidden) noteHidden.value = noteInput.value;
+        // auto-clear handled on amount input
+      });
+    }
+
+    // amount input: auto-clear note when amount becomes 0 (MP_V2 #9, MISC comments)
+    tbody().querySelectorAll('.planner-amount').forEach(input => {
+      input.addEventListener('input', function () {
+        const row = input.closest('tr');
+        if (!row) return;
+        const val = Number(input.value) || 0;
+        if (val === 0) {
+          const nh = row.querySelector('.planner-note');
+          if (nh) nh.value = '';
+          if (selectedRow === row) {
+            const ni = document.getElementById('notesInput');
+            if (ni) ni.value = '';
+          }
+        }
+        updateTotal();
+      });
+    });
+
     updateTotal();
     if (window.App && window.App.renderIcons) window.App.renderIcons();
   }
 
-  /**
-   * A one-time entry has one date: its From date is also its end, so the Repeat
-   * checkbox and the Until month have nothing to say for it.
-   */
   function syncFrequency(row) {
     const select = row.querySelector('.planner-frequency');
     const repeat = row.querySelector('.planner-recurring');
@@ -202,7 +258,9 @@
         recurring: row.querySelector('.planner-recurring').checked,
         frequency: row.querySelector('.planner-frequency').value,
         startDate: row.querySelector('.planner-start').value || null,
-        endDate: row.querySelector('.planner-end').value || null
+        endDate: row.querySelector('.planner-end').value || null,
+        note: (row.querySelector('.planner-note') && row.querySelector('.planner-note').value) || null,
+        paid: IS_SPENDING ? (row.querySelector('.planner-paid') ? row.querySelector('.planner-paid').checked : false) : undefined
       });
     });
     const button = document.getElementById('saveBtn');
@@ -221,6 +279,16 @@
         if (button) button.disabled = false;
       });
   }
+
+  // credit card open link -> open modal
+  document.addEventListener('click', function (event) {
+    const link = event.target.closest('[data-cc-open]');
+    if (!link) return;
+    event.preventDefault();
+    const opener = document.getElementById('ccOpen');
+    if (opener) opener.click();
+    else if (window.openCreditCards) window.openCreditCards();
+  });
 
   document.addEventListener('DOMContentLoaded', function () {
     const input = monthInput();
@@ -242,7 +310,6 @@
         if (row && event.target.classList.contains('planner-frequency')) syncFrequency(row);
       });
     }
-    // The credit card popup saves bills that this screen shows, so it asks for a reload.
     document.addEventListener('planner:refresh', load);
 
     load();

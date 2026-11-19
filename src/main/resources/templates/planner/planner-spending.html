@@ -26,8 +26,13 @@
         <input type="month" id="planMonth" title="Plan month">
         <button type="button" class="btn" id="nextMonth" title="Next month">&rsaquo;</button>
         <button type="button" class="btn primary" id="saveBtn"><i data-lucide="save"></i>Save month</button>
-        <button type="button" class="btn" id="ccOpen"><i data-lucide="credit-card"></i>Credit Cards</button>
         <span class="muted" id="monthLabel"></span>
+    </div>
+
+    <div id="notesBanner" class="status-banner info" style="display:none;"></div>
+    <div class="nav-buttons" style="justify-content:flex-start; align-items:center; gap:8px; margin-top:0;">
+        <label class="muted" for="notesInput">Notes for selected row:</label>
+        <input type="text" id="notesInput" style="flex:1; min-width:200px;" placeholder="Select a row to add notes">
     </div>
 
     <table class="data-table" id="plannerTable">
@@ -39,7 +44,7 @@
             <th>Frequency</th>
             <th>From</th>
             <th>Until</th>
-            <th>Status</th>
+            <th>Paid</th>
         </tr>
         </thead>
         <tbody></tbody>

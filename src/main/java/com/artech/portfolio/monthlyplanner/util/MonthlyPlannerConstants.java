@@ -42,7 +42,8 @@ public final class MonthlyPlannerConstants {
     public static final String SHARES = "SHARES";
     public static final String BONDS = "BONDS";
     public static final String PPF = "PPF";
-    public static final String EPF_NPS = "EPF_NPS";
+    public static final String EPF = "EPF";
+    public static final String NPS = "NPS";
     public static final String SMALLCASE = "SMALLCASE";
     public static final String CREDIT_CARD = "CREDIT_CARD";
     public static final String LIC = "LIC";
@@ -65,7 +66,8 @@ public final class MonthlyPlannerConstants {
             Map.entry(SHARES, "Buying Shares"),
             Map.entry(BONDS, "Buying Bonds"),
             Map.entry(PPF, "PPF"),
-            Map.entry(EPF_NPS, "EPF / NPS"),
+            Map.entry(EPF, "EPF"),
+            Map.entry(NPS, "NPS"),
             Map.entry(SMALLCASE, "Smallcase"),
             Map.entry(CREDIT_CARD, "Credit Card Bills"),
             Map.entry(LIC, "LIC Insurance Premium"),
@@ -84,7 +86,8 @@ public final class MonthlyPlannerConstants {
      */
     public static final Map<String, String> SOURCE_LINKS = immutable(Map.ofEntries(
             Map.entry(BOND_SIP, "/bonds/bond-sip.html"),
-            Map.entry(MF_SIP, "/mutualfunds/mf-sip-form.html")));
+            Map.entry(MF_SIP, "/mutualfunds/mf-sip-form.html"),
+            Map.entry(CREDIT_CARD, "credit-cards")));
 
     /** MP_V1 #4: the categories that repeat by default until the client says otherwise. */
     public static final Set<String> REPEATING_BY_DEFAULT = Set.of(SALARY, HOME_LOAN);
