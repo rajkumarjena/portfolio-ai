@@ -167,11 +167,28 @@
       + '</tr>';
   }
 
+  // The column headers are the actual months the server computed, e.g.
+  // "November 2026" and "December 2026", for both Self and Family.
+  function plannerMonthHeaders(summary) {
+    const current = summary.currentMonthLabel || 'Current Month';
+    const next = summary.nextMonthLabel || 'Next Month';
+    const set = (id, text) => {
+      const th = document.getElementById(id);
+      if (th) th.textContent = text;
+    };
+    set('plannerSelfCurrentMonth', current);
+    set('plannerSelfNextMonth', next);
+    set('plannerFamilyCurrentMonth', current);
+    set('plannerFamilyNextMonth', next);
+  }
+
   function renderPlanner(summary) {
     const body = plannerBody();
     if (!body) return;
     const earnings = summary.earnings || [];
     const spending = summary.spending || [];
+
+    plannerMonthHeaders(summary);
 
     body.innerHTML = plannerSection('Earnings', earnings, 'Total Earnings',
         summary.selfEarningsCurrent, summary.selfEarningsNext,
@@ -186,7 +203,6 @@
     const foot = document.getElementById('plannerWidgetFoot');
     if (foot) {
       foot.textContent = 'As on ' + fmtDate(summary.asOf)
-        + ' · ' + summary.currentMonthLabel + ' / ' + summary.nextMonthLabel
         + ' · Family = you + your family members';
     }
     if (window.App && window.App.renderIcons) window.App.renderIcons();
