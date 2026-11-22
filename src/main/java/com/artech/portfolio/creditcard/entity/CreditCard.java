@@ -6,10 +6,13 @@ import jakarta.persistence.*;
 import lombok.Data;
 
 /**
- * MPC_V1 - one of the client's credit cards: what it is called and the day of
- * the month its billing cycle ends. The card itself is only a definition - the
- * money is in its bills ({@link CreditCardBill}) and purchases
- * ({@link CreditCardPurchase}), which the Monthly Planner reads per cycle.
+ * MPC_V1 - one of the client's credit cards: what it is called, the day of the
+ * month its billing cycle ends and, since MP_V5, the grace period the bank gives
+ * before the amount is due.
+ *
+ * <p>MP_V5: the money is in the card's purchases
+ * ({@link CreditCardPurchase}); each purchase is billed in a month decided by
+ * the end of its billing cycle plus the grace period.</p>
  */
 @Entity
 @Table(name = "credit_card",
@@ -36,6 +39,12 @@ public class CreditCard {
 
     /** The day of the month each billing cycle ends on (1..31, clamped to the month). */
     private int billingCycleDay;
+
+    /**
+     * MP_V5 #2: days after the cycle end before the amount is due. Nullable so
+     * SQLite can add the column to an existing table; null reads as 0.
+     */
+    private Integer gracePeriodDays;
 
     private String note;
 }

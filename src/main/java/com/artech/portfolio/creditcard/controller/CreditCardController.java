@@ -1,21 +1,25 @@
 package com.artech.portfolio.creditcard.controller;
 
-import com.artech.portfolio.creditcard.dto.CreditCardBillRequest;
 import com.artech.portfolio.creditcard.dto.CreditCardMonthView;
 import com.artech.portfolio.creditcard.dto.CreditCardPurchaseRequest;
 import com.artech.portfolio.creditcard.dto.CreditCardRequest;
+import com.artech.portfolio.creditcard.dto.CreditCardTransactionRequest;
 import com.artech.portfolio.creditcard.service.CreditCardService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.List;
 import java.util.Map;
 
 /**
  * MPC_V1 - the credit card popup's API. Every call returns the refreshed month,
  * so the popup and the planner never disagree about a figure; ownership and all
- * cycle arithmetic live in the service.
+ * month arithmetic live in the service.
+ *
+ * <p>MP_V5: the bill of a cycle was replaced by the transactions' billed months;
+ * "Save Bill" saves them all at once.</p>
  */
 @RestController
 @RequestMapping("/api/credit-cards")
@@ -27,7 +31,7 @@ public class CreditCardController {
         this.creditCardService = creditCardService;
     }
 
-    /** Every card with the billing cycle that ends in ?month=yyyy-MM. */
+    /** Every card with the transactions billable in ?month=yyyy-MM. */
     @GetMapping
     public CreditCardMonthView month(
             @RequestParam(value = "month", required = false) String month) {
@@ -42,7 +46,7 @@ public class CreditCardController {
         return creditCardService.month(month);
     }
 
-    /** Edit a card - its name and its billing-cycle day. */
+    /** Edit a card - its name, billing-cycle day and grace period. */
     @PutMapping("/{id}")
     public CreditCardMonthView update(@PathVariable("id") Long id,
                                       @RequestBody CreditCardRequest request,
@@ -52,7 +56,7 @@ public class CreditCardController {
         return creditCardService.month(month);
     }
 
-    /** Remove a card together with its bills and purchases. */
+    /** Remove a card together with its transactions. */
     @DeleteMapping("/{id}")
     public CreditCardMonthView delete(@PathVariable("id") Long id,
                                       @RequestParam(value = "month", required = false) String month) {
@@ -60,16 +64,19 @@ public class CreditCardController {
         return creditCardService.month(month);
     }
 
-    /** Enter the bill amount of one billing cycle. */
-    @PutMapping("/{id}/bills")
-    public CreditCardMonthView saveBill(@PathVariable("id") Long id,
-                                        @RequestBody CreditCardBillRequest request,
-                                        @RequestParam(value = "month", required = false) String month) {
-        creditCardService.saveBill(id, request);
+    /**
+     * MP_V5 #3.iv: save the billed month of every newly added or modified
+     * transaction of the whole Credit Card Transactions screen.
+     */
+    @PutMapping("/transactions")
+    public CreditCardMonthView saveTransactions(
+            @RequestBody List<CreditCardTransactionRequest> transactions,
+            @RequestParam(value = "month", required = false) String month) {
+        creditCardService.saveTransactions(transactions);
         return creditCardService.month(month);
     }
 
-    /** Capture a purchase; its date decides the cycle it is billed in. */
+    /** Capture a purchase; its date decides the cycle it belongs to. */
     @PostMapping("/{id}/purchases")
     public CreditCardMonthView addPurchase(
             @PathVariable("id") Long id,
