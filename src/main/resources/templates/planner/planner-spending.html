@@ -18,8 +18,10 @@
         month only. A <strong>weekly</strong> line counts the weeks that fall in the month, so a
         month with 5 Mondays costs 5 times the weekly figure. Bond SIP and Mutual Fund SIP are
         filled in automatically from their own screens. <strong>Credit Card Bills</strong> comes
-        from the cards you save with <strong>Credit Cards</strong>: each card's expense is planned
-        in the month its billing cycle ends.</p>
+        from the transactions you save on the <strong>Credit Card Bills Entry</strong> screen: each
+        transaction is billed in the month of its billing cycle end plus the card's grace
+        period, and this month's line is the sum of the transactions billed in the month
+        selected above.</p>
 
     <div id="plannerBanner" class="status-banner" style="display:none;"></div>
 
@@ -87,33 +89,75 @@
         </div>
     </div>
 
-    <!-- MPC_V1: every card, its billing cycle of the plan month, the cycle's bill
-         amount and the purchases captured in it. -->
+    <!-- MPC_V1 / MP_V5: Credit Card Bills Entry - the card form and the card
+         transactions live in two tabs, above them the two month totals, and
+         every transaction carries the month it is billed in. -->
     <div class="modal-overlay" id="ccModal">
         <div class="modal wide">
             <button type="button" class="close-x" id="ccClose">&times;</button>
-            <h3>Credit Cards <span class="muted" id="ccMonthLabel"></span></h3>
-            <p class="muted">Each card's expense is planned in the month its billing cycle
-                <strong>ends</strong>. Enter the bill amount of every cycle; until a bill is entered
-                the purchases captured for the cycle are planned instead. Changing the billing-cycle
-                day moves the following cycles, so re-enter the current cycle's bill if it changes.</p>
+            <h3>Credit Card Bills Entry</h3>
 
+            <!-- MP_V5 #4: both month totals, before the tabs. -->
+            <div class="cc-summary">
+                <div class="cc-total">
+                    <span>Bill Amount for <strong id="ccCurrentMonthName">this month</strong></span>
+                    <strong class="cc-total-value" id="ccCurrentTotal">0</strong>
+                </div>
+                <div class="cc-total">
+                    <span>Bill Amount for <strong id="ccNextMonthName">next month</strong></span>
+                    <strong class="cc-total-value" id="ccNextTotal">0</strong>
+                </div>
+            </div>
+
+            <!-- MP_V5 #2: two tabs - the transactions and the card form. -->
+            <div class="cc-tabs" role="tablist">
+                <button type="button" class="cc-tab active" role="tab" aria-selected="true"
+                        data-cc-tab="transactions">Credit Card Transactions</button>
+                <button type="button" class="cc-tab" role="tab" aria-selected="false"
+                        data-cc-tab="add">Add Credit Card</button>
+            </div>
+
+            <!-- One banner for both tabs, so form validation is visible on the
+                 Add Credit Card tab too. -->
             <div id="ccBanner" class="status-banner" style="display:none;"></div>
 
-            <div class="filter-section">
-                <label id="ccCardFormTitle">Add a credit card</label>
-                <input type="text" id="ccName" maxlength="60" placeholder="Card name (e.g. HDFC Millennia)">
-                <select id="ccDay" title="The day each billing cycle ends on"></select>
-                <button type="button" class="btn primary" id="ccSaveCard">Add card</button>
-                <button type="button" class="btn" id="ccCancelCard" style="display:none;">Cancel</button>
-                <span class="muted">Total planned this month: <strong id="ccTotal">0</strong></span>
-            </div>
+            <section class="cc-tab-panel" id="ccTabTransactions" role="tabpanel">
+                <p class="muted">Each card's transactions are billed in the month of their billing
+                    cycle end plus the card's grace period. Tick <strong>Bill in\u2026</strong> to move a
+                    transaction between this month and the next; <strong>Save Bill</strong> saves every
+                    changed transaction of every card on this screen.</p>
 
-            <div id="ccCards"></div>
+                <div id="ccCards"></div>
 
-            <div class="nav-buttons">
-                <button type="button" class="btn" id="ccDone">Close</button>
-            </div>
+                <div class="nav-buttons">
+                    <button type="button" class="btn" id="ccDone">Close</button>
+                </div>
+            </section>
+
+            <section class="cc-tab-panel" id="ccTabAdd" role="tabpanel" hidden>
+                <p class="muted" id="ccCardFormTitle">Add a credit card</p>
+                <div class="cc-form">
+                    <div class="field">
+                        <label for="ccName">Credit Card Name</label>
+                        <input type="text" id="ccName" maxlength="60"
+                               placeholder="e.g. HDFC Millennia">
+                    </div>
+                    <div class="field">
+                        <label for="ccDay">Billing Cycle</label>
+                        <select id="ccDay" title="The day each billing cycle ends on"></select>
+                    </div>
+                    <div class="field">
+                        <label for="ccGrace">Grace Period (days)</label>
+                        <input type="number" id="ccGrace" min="0" max="60" step="1"
+                               placeholder="e.g. 20">
+                    </div>
+                    <div class="cc-form-actions">
+                        <button type="button" class="btn primary" id="ccSaveCard">Add Card</button>
+                        <button type="button" class="btn" id="ccCancelCard"
+                                style="display:none;">Cancel</button>
+                    </div>
+                </div>
+            </section>
         </div>
     </div>
 </main>

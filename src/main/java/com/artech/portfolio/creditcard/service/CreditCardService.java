@@ -1,17 +1,22 @@
 package com.artech.portfolio.creditcard.service;
 
-import com.artech.portfolio.creditcard.dto.CreditCardBillRequest;
 import com.artech.portfolio.creditcard.dto.CreditCardMonthView;
 import com.artech.portfolio.creditcard.dto.CreditCardPurchaseRequest;
 import com.artech.portfolio.creditcard.dto.CreditCardPurchaseView;
 import com.artech.portfolio.creditcard.dto.CreditCardRequest;
+import com.artech.portfolio.creditcard.dto.CreditCardTransactionRequest;
 
 import java.time.LocalDate;
+import java.util.List;
 
 /**
- * MPC_V1 - the client's credit cards and their bills. Every card has a billing
- * cycle; the amount planned in a month is the bill of the cycle that ends in
- * that month (or, until the bill is entered, the purchases of the cycle).
+ * MPC_V1 - the client's credit cards and their transactions.
+ *
+ * <p>MP_V5: a card is a name, a billing-cycle day and a grace period. Every
+ * purchase is billed in one month - the month of its cycle end plus the grace
+ * period by default, movable between the current and the next month - and the
+ * amount the Monthly Planner plans for a month is the sum of the transactions
+ * billed in that month.</p>
  *
  * <p>Everything is scoped to the signed-in client (CONSISTENCY.md 6): a card id
  * coming from the popup is only ever accepted when it belongs to the session's
@@ -19,17 +24,17 @@ import java.time.LocalDate;
  */
 public interface CreditCardService {
 
-    /** Every card with the billing cycle that ends in {@code month} ("yyyy-MM"). */
+    /** Every card with its transactions for {@code month} ("yyyy-MM"). */
     CreditCardMonthView month(String month);
 
-    /** Add a card (no id) or edit one - including its billing-cycle day. */
+    /** Add a card (no id) or edit one - name, cycle day and grace period. */
     void saveCard(CreditCardRequest request);
 
-    /** Remove a card with its bills and purchases. */
+    /** Remove a card with its transactions. */
     void deleteCard(Long cardId);
 
-    /** Enter (or correct) the bill amount of one billing cycle. */
-    void saveBill(Long cardId, CreditCardBillRequest request);
+    /** MP_V5 #3.iv: save every changed transaction's billed month in one call. */
+    void saveTransactions(List<CreditCardTransactionRequest> transactions);
 
     CreditCardPurchaseView addPurchase(Long cardId, CreditCardPurchaseRequest request);
 
@@ -37,8 +42,8 @@ public interface CreditCardService {
 
     /**
      * What every card plans in the month - the Monthly Planner's credit card
-     * figure. Used by the planner module, so it takes the already-resolved
-     * client id instead of asking the session again.
+     * figure (MP_V5 #5/#6). Used by the planner module, so it takes the
+     * already-resolved client id instead of asking the session again.
      */
     double monthTotal(Long clientId, LocalDate month);
 }

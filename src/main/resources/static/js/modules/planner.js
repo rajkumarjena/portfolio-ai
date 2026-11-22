@@ -115,10 +115,41 @@
       || category === 'MISC_SPENDING' || category.indexOf('MISC_SPENDING#') === 0;
   }
 
+  // MP_V5 #7: the first characters of the note sit under "Miscellaneous(Note)"
+  // in italics, so the kind of spending is readable without opening the note.
+  const NOTE_PREVIEW_LENGTH = 20;
+
+  function notePreviewText(value) {
+    const note = String(value == null ? '' : value).trim();
+    if (!note) return '';
+    return note.length > NOTE_PREVIEW_LENGTH
+      ? note.slice(0, NOTE_PREVIEW_LENGTH) + '\u2026'
+      : note;
+  }
+
   function labelHtml(line) {
-    return isMiscLine(line)
-      ? 'Miscellaneous<a href="#" class="misc-note-link" data-misc-note title="Add a note for this Miscellaneous amount">(Note)</a>'
-      : esc(line.label);
+    if (!isMiscLine(line)) return esc(line.label);
+    const preview = notePreviewText(line.note);
+    return 'Miscellaneous<a href="#" class="misc-note-link" data-misc-note title="Add a note for this Miscellaneous amount">(Note)</a>'
+      + (preview ? '<span class="misc-note-preview">' + esc(preview) + '</span>' : '');
+  }
+
+  function setNotePreview(row, value) {
+    if (!row || !row.querySelector('[data-misc-note]')) return;
+    const cell = row.querySelector('td.left');
+    if (!cell) return;
+    let preview = cell.querySelector('.misc-note-preview');
+    const text = notePreviewText(value);
+    if (!text) {
+      if (preview) preview.remove();
+      return;
+    }
+    if (!preview) {
+      preview = document.createElement('span');
+      preview.className = 'misc-note-preview';
+      cell.appendChild(preview);
+    }
+    preview.textContent = text;
   }
 
   function rowHtml(line) {
@@ -160,6 +191,7 @@
     if (!selectedRow) return;
     const noteHidden = selectedRow.querySelector('.planner-note');
     if (noteHidden) noteHidden.value = value;
+    setNotePreview(selectedRow, value);
     const cat = selectedRow.getAttribute('data-category');
     const line = lines().find(l => l.category === cat);
     if (line) line.note = value;

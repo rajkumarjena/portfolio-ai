@@ -502,7 +502,7 @@ public class MonthlyPlannerServiceImpl implements MonthlyPlannerService {
         if (mfSip > 0) {
             amounts.put(MonthlyPlannerConstants.MF_SIP, mfSip);
         }
-        // MP_V1 #9: every card's bill for the cycle that ends in this month.
+        // MP_V5 #5/#6: every card's transactions billed in this month.
         double creditCards = creditCardService.monthTotal(clientId, month);
         if (creditCards > 0) {
             amounts.put(MonthlyPlannerConstants.CREDIT_CARD, creditCards);

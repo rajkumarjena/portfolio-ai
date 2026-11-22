@@ -7,9 +7,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * MPC_V1 - one card and the billing cycle that ends in the planner month: its
- * dates, the purchases captured in it, whether a bill was entered and what the
- * Monthly Planner is given for the month.
+ * MPC_V1 - one card and its billing cycle of the planner month.
+ *
+ * <p>MP_V5 #3: the purchases carry the two month options, and the card sums its
+ * own transactions for the current and the next month. {@code amount} stays what
+ * the Monthly Planner plans for its month (every transaction billed in it).</p>
  */
 @Data
 public class CreditCardView {
@@ -17,6 +19,8 @@ public class CreditCardView {
     private Long id;
     private String name;
     private int billingCycleDay;
+    /** MP_V5 #2: days after the cycle end before the amount is due. */
+    private int gracePeriodDays;
     private String note;
 
     private LocalDate cycleStart;
@@ -24,16 +28,15 @@ public class CreditCardView {
     /** "6 Oct 2026 - 5 Nov 2026", ready to render. */
     private String cycleLabel;
 
+    /** MP_V5 #3: the transactions billable in the current or the next month. */
     private List<CreditCardPurchaseView> purchases = new ArrayList<>();
-    private double purchaseTotal;
     private int purchaseCount;
 
-    /** The bill the client entered for the cycle (0 when none was entered). */
-    private double billAmount;
-    private boolean billEntered;
+    /** MP_V5 #3.vi: this card's total billed in the current month. */
+    private double currentBillTotal;
+    /** MP_V5 #3.vi: this card's total billed in the next month. */
+    private double nextBillTotal;
 
-    /** What this card plans in the month: the bill when entered, else the purchases. */
+    /** What this card plans in the planner month - transactions billed in it. */
     private double amount;
-    /** BILL / PURCHASES / NONE - how {@code amount} was arrived at. */
-    private String amountSource;
 }

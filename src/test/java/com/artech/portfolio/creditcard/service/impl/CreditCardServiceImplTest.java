@@ -2,18 +2,16 @@ package com.artech.portfolio.creditcard.service.impl;
 
 import com.artech.portfolio.auth.service.CurrentUserService;
 import com.artech.portfolio.client.entity.Client;
-import com.artech.portfolio.creditcard.dto.CreditCardBillRequest;
 import com.artech.portfolio.creditcard.dto.CreditCardMonthView;
 import com.artech.portfolio.creditcard.dto.CreditCardPurchaseRequest;
+import com.artech.portfolio.creditcard.dto.CreditCardPurchaseView;
 import com.artech.portfolio.creditcard.dto.CreditCardRequest;
+import com.artech.portfolio.creditcard.dto.CreditCardTransactionRequest;
 import com.artech.portfolio.creditcard.dto.CreditCardView;
 import com.artech.portfolio.creditcard.entity.CreditCard;
-import com.artech.portfolio.creditcard.entity.CreditCardBill;
 import com.artech.portfolio.creditcard.entity.CreditCardPurchase;
-import com.artech.portfolio.creditcard.repository.CreditCardBillRepository;
 import com.artech.portfolio.creditcard.repository.CreditCardPurchaseRepository;
 import com.artech.portfolio.creditcard.repository.CreditCardRepository;
-import com.artech.portfolio.creditcard.util.CreditCardConstants;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -34,39 +32,39 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * MPC_V1 credit cards:
+ * MPC_V1 + MP_V5 credit cards:
  *   #1  a cycle ends on the card's billing day and starts the day after the
  *       previous cycle ended (month end when the day is shorter),
- *   #2  the expense is planned in the month the cycle ends,
- *   #3  the entered bill wins and the purchases fill in until then,
- *   #4  a card of another client is never found.
+ *   #2  a transaction is billed in the month of its cycle end plus the grace
+ *       period, movable only when that lands in the next month,
+ *   #3  the planner month's figure is the sum of the transactions billed in it,
+ *   #4  a card/purchase of another client is never found,
+ *   #5  only the current and the previous month's transactions can be removed.
  */
 class CreditCardServiceImplTest {
 
     private static final LocalDate NOVEMBER = LocalDate.of(2026, 11, 1);
+    private static final LocalDate DECEMBER = LocalDate.of(2026, 12, 1);
 
     private CreditCardRepository cardRepository;
-    private CreditCardBillRepository billRepository;
     private CreditCardPurchaseRepository purchaseRepository;
     private CurrentUserService currentUserService;
     private CreditCardServiceImpl service;
 
     private Client owner;
     private final List<CreditCard> cards = new ArrayList<>();
-    private final List<CreditCardBill> bills = new ArrayList<>();
     private final List<CreditCardPurchase> purchases = new ArrayList<>();
     private long nextCardId = 1;
-    private long nextBillId = 1;
     private long nextPurchaseId = 1;
 
     @BeforeEach
     void setUp() {
         cardRepository = mock(CreditCardRepository.class);
-        billRepository = mock(CreditCardBillRepository.class);
         purchaseRepository = mock(CreditCardPurchaseRepository.class);
         currentUserService = mock(CurrentUserService.class);
 
@@ -94,70 +92,62 @@ class CreditCardServiceImplTest {
             return card;
         });
 
-        when(billRepository.findByCardIdAndCycleEnd(anyLong(), any(LocalDate.class)))
-                .thenAnswer(inv -> bills.stream()
-                        .filter(bill -> bill.getCard().getId().equals(inv.getArgument(0))
-                                && bill.getCycleEnd().equals(inv.getArgument(1)))
-                        .findFirst());
-        when(billRepository.save(any(CreditCardBill.class))).thenAnswer(inv -> {
-            CreditCardBill bill = inv.getArgument(0);
-            bills.removeIf(existing -> existing.getCard().getId().equals(bill.getCard().getId())
-                    && existing.getCycleEnd().equals(bill.getCycleEnd()));
-            if (bill.getId() == null) {
-                bill.setId(nextBillId++);
-            }
-            bills.add(bill);
-            return bill;
-        });
-
-        when(purchaseRepository.findByCardIdAndPurchaseDateBetweenOrderByPurchaseDateAsc(
-                anyLong(), any(LocalDate.class), any(LocalDate.class))).thenAnswer(inv -> purchases.stream()
+        when(purchaseRepository.findByCardIdOrderByPurchaseDateAsc(anyLong()))
+                .thenAnswer(inv -> purchases.stream()
                         .filter(purchase -> purchase.getCard().getId().equals(inv.getArgument(0)))
-                        .filter(purchase -> !purchase.getPurchaseDate().isBefore(inv.getArgument(1))
-                                && !purchase.getPurchaseDate().isAfter(inv.getArgument(2)))
                         .sorted(Comparator.comparing(CreditCardPurchase::getPurchaseDate))
                         .toList());
+        when(purchaseRepository.findById(anyLong())).thenAnswer(inv -> purchases.stream()
+                .filter(purchase -> purchase.getId().equals(inv.getArgument(0)))
+                .findFirst());
         when(purchaseRepository.save(any(CreditCardPurchase.class))).thenAnswer(inv -> {
             CreditCardPurchase purchase = inv.getArgument(0);
             if (purchase.getId() == null) {
                 purchase.setId(nextPurchaseId++);
             }
-            purchases.add(purchase);
+            if (!purchases.contains(purchase)) {
+                purchases.add(purchase);
+            }
             return purchase;
         });
+        doAnswer(inv -> purchases.remove(inv.getArgument(0)))
+                .when(purchaseRepository).delete(any(CreditCardPurchase.class));
 
         Clock clock = Clock.fixed(LocalDate.of(2026, 11, 15).atStartOfDay(ZoneId.systemDefault()).toInstant(),
                 ZoneId.systemDefault());
-        service = new CreditCardServiceImpl(cardRepository, billRepository, purchaseRepository,
+        service = new CreditCardServiceImpl(cardRepository, purchaseRepository,
                 currentUserService, clock);
     }
 
     // ------------------------------------------------------------- helpers
 
-    private CreditCard card(String name, int billingCycleDay) {
+    private CreditCard card(String name, int billingCycleDay, int gracePeriodDays) {
         CreditCard card = new CreditCard();
         card.setId(nextCardId++);
         card.setClient(owner);
         card.setName(name);
         card.setBillingCycleDay(billingCycleDay);
+        card.setGracePeriodDays(gracePeriodDays);
         cards.add(card);
         return card;
     }
 
-    private CreditCardBillRequest bill(String cycleEnd, double amount) {
-        CreditCardBillRequest request = new CreditCardBillRequest();
-        request.setCycleEnd(cycleEnd);
-        request.setAmount(amount);
-        return request;
-    }
-
-    private void purchase(CreditCard card, String date, double amount) {
+    private CreditCardPurchase purchase(CreditCard card, String date, double amount) {
         CreditCardPurchase purchase = new CreditCardPurchase();
         purchase.setId(nextPurchaseId++);
         purchase.setCard(card);
         purchase.setPurchaseDate(LocalDate.parse(date));
         purchase.setAmount(amount);
         purchases.add(purchase);
+        return purchase;
+    }
+
+    private static CreditCardPurchaseRequest purchaseRequest(String date, double amount) {
+        CreditCardPurchaseRequest request = new CreditCardPurchaseRequest();
+        request.setPurchaseDate(date);
+        request.setAmount(amount);
+        request.setDescription("Fuel");
+        return request;
     }
 
     private static CreditCardView only(CreditCardMonthView view) {
@@ -165,11 +155,18 @@ class CreditCardServiceImplTest {
         return view.getCards().get(0);
     }
 
+    private static CreditCardTransactionRequest move(Long id, String month) {
+        CreditCardTransactionRequest request = new CreditCardTransactionRequest();
+        request.setPurchaseId(id);
+        request.setBillMonth(month);
+        return request;
+    }
+
     // ------------------------------------------------------- billing cycles
 
     @Test
     void aCycleEndsOnTheBillingDayAndStartsTheDayAfterThePreviousOne() {
-        card("HDFC Millennia", 5);
+        card("HDFC Millennia", 5, 0);
 
         CreditCardView view = only(service.month("2026-11"));
 
@@ -180,7 +177,7 @@ class CreditCardServiceImplTest {
 
     @Test
     void aCycleDayPastTheMonthEndEndsOnTheLastDay() {
-        card("ICICI", 31);
+        card("ICICI", 31, 0);
 
         CreditCardView view = only(service.month("2026-02"));
 
@@ -188,155 +185,241 @@ class CreditCardServiceImplTest {
         assertEquals(LocalDate.of(2026, 2, 1), view.getCycleStart());
     }
 
-    // ------------------------------------------------ #2/#3 the planned figure
+    // ------------------------------------------------- MP_V5 the billed month
 
     @Test
-    void theEnteredBillIsPlannedInTheMonthItsCycleEnds() {
-        CreditCard card = card("HDFC Millennia", 5);
+    void aPurchaseIsBilledInTheMonthOfItsCycleEndPlusTheGracePeriod() {
+        CreditCard card = card("HDFC Millennia", 5, 20);
         purchase(card, "2026-10-20", 3000);
-        service.saveBill(card.getId(), bill("2026-11-05", 45230));
 
         CreditCardMonthView view = service.month("2026-11");
         CreditCardView cardView = only(view);
 
-        assertTrue(cardView.isBillEntered());
-        assertEquals(45230.0, cardView.getBillAmount());
-        assertEquals(45230.0, cardView.getAmount(), "the bill of the November cycle");
-        assertEquals(CreditCardConstants.AMOUNT_BILL, cardView.getAmountSource());
-        assertEquals(45230.0, view.getTotal());
-        assertEquals(1, cardView.getPurchases().size());
+        // 20 October is in the cycle ending 5 November; 5 November + 20 days = 25 November.
+        CreditCardPurchaseView row = cardView.getPurchases().get(0);
+        assertEquals(LocalDate.of(2026, 11, 1), row.getBillMonth());
+        assertTrue(row.isCurrentSelected());
+        assertFalse(row.isNextSelected());
+        assertTrue(row.isNextDisabled(), "the current month is the only option");
 
-        // A purchase dated 20 October belongs to the cycle ending 5 November, not to October.
-        assertEquals(0.0, service.monthTotal(owner.getId(), LocalDate.of(2026, 10, 1)));
-        assertEquals(45230.0, service.monthTotal(owner.getId(), NOVEMBER));
+        assertEquals(3000.0, cardView.getAmount());
+        assertEquals(3000.0, cardView.getCurrentBillTotal());
+        assertEquals(0.0, cardView.getNextBillTotal());
+        assertEquals(3000.0, view.getTotal());
+        assertEquals(3000.0, view.getCurrentBillTotal());
+
+        assertEquals(3000.0, service.monthTotal(owner.getId(), NOVEMBER));
+        assertEquals(0.0, service.monthTotal(owner.getId(), DECEMBER));
     }
 
     @Test
-    void withoutABillThePurchasesOfTheCycleArePlanned() {
-        CreditCard card = card("HDFC Millennia", 5);
+    void aLongerGracePeriodMovesTheBillToTheNextMonth() {
+        CreditCard card = card("HDFC Millennia", 5, 40);
         purchase(card, "2026-10-20", 3000);
-        purchase(card, "2026-11-02", 2000);
-        purchase(card, "2026-11-14", 9000); // after the 5 November cycle end
 
         CreditCardMonthView view = service.month("2026-11");
-        CreditCardView cardView = only(view);
+        CreditCardPurchaseView row = only(view).getPurchases().get(0);
 
-        assertFalse(cardView.isBillEntered());
-        assertEquals(5000.0, cardView.getPurchaseTotal());
-        assertEquals(5000.0, cardView.getAmount());
-        assertEquals(CreditCardConstants.AMOUNT_PURCHASES, cardView.getAmountSource());
-        assertEquals(5000.0, service.monthTotal(owner.getId(), NOVEMBER),
-                "the later purchase is billed in December");
+        // 5 November + 40 days = 15 December.
+        assertEquals(DECEMBER, row.getBillMonth());
+        assertFalse(row.isCurrentSelected());
+        assertTrue(row.isNextSelected());
+        assertFalse(row.isNextDisabled(), "it may be pulled back to November");
+
+        assertEquals(3000.0, view.getNextBillTotal());
+        assertEquals(0.0, view.getCurrentBillTotal());
+        assertEquals(0.0, only(view).getAmount(), "nothing is billed in November");
+        assertEquals(0.0, service.monthTotal(owner.getId(), NOVEMBER));
+        assertEquals(3000.0, service.monthTotal(owner.getId(), DECEMBER));
     }
 
     @Test
-    void aCardWithoutAnyFigurePlansNothing() {
-        card("Axis", 12);
+    void onlyTheCurrentAndNextMonthsTransactionsAreListed() {
+        CreditCard card = card("HDFC Millennia", 5, 10);
+        purchase(card, "2026-08-01", 100);  // billed in August - outside the window
+        purchase(card, "2026-09-20", 200);  // billed in October - still removable
+        purchase(card, "2026-10-20", 300);  // billed in November
+        purchase(card, "2026-11-14", 400);  // billed in December
 
         CreditCardMonthView view = service.month("2026-11");
 
-        assertEquals(0.0, only(view).getAmount());
-        assertEquals(CreditCardConstants.AMOUNT_NONE, only(view).getAmountSource());
-        assertEquals(0.0, view.getTotal());
+        List<CreditCardPurchaseView> rows = only(view).getPurchases();
+        assertEquals(3, rows.size());
+        assertTrue(rows.stream().anyMatch(row -> row.getBillMonth().equals(NOVEMBER)));
+        assertTrue(rows.stream().anyMatch(row -> row.getBillMonth().equals(DECEMBER)));
+
+        // The October row is listed (deletable) but not in either month total.
+        assertFalse(rows.stream().anyMatch(row -> row.getBillMonth()
+                .equals(LocalDate.of(2026, 10, 1)) && row.isCurrentSelected()));
+
+        assertEquals(300.0, only(view).getCurrentBillTotal());
+        assertEquals(400.0, only(view).getNextBillTotal());
+        assertEquals(300.0, service.monthTotal(owner.getId(), NOVEMBER));
+        assertEquals(400.0, service.monthTotal(owner.getId(), DECEMBER));
+        assertEquals(200.0, service.monthTotal(owner.getId(), LocalDate.of(2026, 10, 1)));
+    }
+
+    // --------------------------------------------------- MP_V5 save the bills
+
+    @Test
+    void savingTransactionsMovesTheBillToTheChosenMonth() {
+        CreditCard card = card("HDFC Millennia", 5, 40);
+        CreditCardPurchase purchase = purchase(card, "2026-10-20", 3000);
+        service.saveTransactions(request(move(purchase.getId(), "2026-11")));
+
+        assertEquals(3000.0, service.monthTotal(owner.getId(), NOVEMBER));
+        assertEquals(0.0, service.monthTotal(owner.getId(), DECEMBER));
+
+        CreditCardPurchaseView row = only(service.month("2026-11")).getPurchases().get(0);
+        assertTrue(row.isCurrentSelected());
+        assertFalse(row.isNextSelected());
+    }
+
+    @Test
+    void savingTransactionsRejectsAMonthOtherThanTheCurrentOrNextOne() {
+        CreditCard card = card("HDFC Millennia", 5, 15);
+        CreditCardPurchase purchase = purchase(card, "2026-10-20", 3000);
+
+        ResponseStatusException error = assertThrows(ResponseStatusException.class,
+                () -> service.saveTransactions(request(move(purchase.getId(), "2026-09"))));
+        assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode());
+        assertEquals(null, purchase.getBillMonth(), "the rejected change is not stored");
+    }
+
+    @Test
+    void aPurchaseOfAnotherClientIsNeverSaved() {
+        CreditCard foreignCard = new CreditCard();
+        foreignCard.setId(42L);
+        Client other = new Client();
+        other.setId(99L);
+        foreignCard.setClient(other);
+        foreignCard.setBillingCycleDay(5);
+
+        CreditCardPurchase foreign = new CreditCardPurchase();
+        foreign.setId(77L);
+        foreign.setCard(foreignCard);
+        foreign.setPurchaseDate(LocalDate.of(2026, 10, 20));
+        foreign.setAmount(100);
+        purchases.add(foreign);
+
+        ResponseStatusException error = assertThrows(ResponseStatusException.class,
+                () -> service.saveTransactions(request(move(77L, "2026-11"))));
+        assertEquals(HttpStatus.NOT_FOUND, error.getStatusCode());
+    }
+
+    // ------------------------------------------------ MP_V5 removal window
+
+    @Test
+    void onlyTheCurrentAndThePreviousMonthCanBeRemoved() {
+        CreditCard card = card("HDFC Millennia", 5, 0);
+        CreditCardPurchase september = purchase(card, "2026-09-10", 100);
+        september.setBillMonth(LocalDate.of(2026, 9, 1));
+        CreditCardPurchase october = purchase(card, "2026-10-10", 200);
+        october.setBillMonth(LocalDate.of(2026, 10, 1));
+
+        ResponseStatusException error = assertThrows(ResponseStatusException.class,
+                () -> service.deletePurchase(september.getId()));
+        assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode());
+        assertEquals(2, purchases.size());
+
+        service.deletePurchase(october.getId());
+        assertEquals(1, purchases.size());
     }
 
     // ------------------------------------------------------------- writing
 
     @Test
-    void theBillingCycleDayCanBeChangedLater() {
-        CreditCard card = card("HDFC Millennia", 5);
-        service.saveBill(card.getId(), bill("2026-11-05", 1000));
+    void aPurchaseIsStoredWithTheMonthItsCycleAndGraceDecide() {
+        CreditCard card = card("HDFC Millennia", 5, 40);
 
-        CreditCardRequest change = new CreditCardRequest();
-        change.setId(card.getId());
-        change.setName("HDFC Millennia");
-        change.setBillingCycleDay(10);
-        service.saveCard(change);
+        CreditCardPurchaseView row = service.addPurchase(card.getId(),
+                purchaseRequest("2026-10-20", 750));
 
-        assertEquals(10, only(service.month("2026-11")).getBillingCycleDay());
-        assertEquals(LocalDate.of(2026, 11, 10), only(service.month("2026-11")).getCycleEnd());
-        assertEquals(0.0, service.monthTotal(owner.getId(), NOVEMBER),
-                "the old 5 November bill belongs to the old cycle");
-
-        // The new bill is entered against the moved cycle, whatever day it is given.
-        service.saveBill(card.getId(), bill("2026-11-09", 1200));
-        assertEquals(1200.0, service.monthTotal(owner.getId(), NOVEMBER));
+        assertEquals(LocalDate.of(2026, 12, 1), row.getBillMonth());
+        assertEquals(750.0, service.monthTotal(owner.getId(), DECEMBER));
+        assertEquals(0.0, service.monthTotal(owner.getId(), NOVEMBER));
     }
 
     @Test
-    void aPurchaseIsBilledInTheCycleOfItsOwnDate() {
-        CreditCard card = card("HDFC Millennia", 5);
-
-        CreditCardPurchaseRequest request = new CreditCardPurchaseRequest();
-        request.setPurchaseDate("2026-11-04");
-        request.setAmount(750.0);
-        request.setDescription("Fuel");
-        service.addPurchase(card.getId(), request);
-
-        assertEquals(750.0, only(service.month("2026-11")).getAmount());
-        assertEquals("Fuel", only(service.month("2026-11")).getPurchases().get(0).getDescription());
-    }
-
-    @Test
-    void aCardNeedsANameAndAValidCycleDay() {
+    void aCardNeedsANameACycleDayAndAGracePeriod() {
         CreditCardRequest noName = new CreditCardRequest();
         noName.setName("  ");
-        assertEquals(HttpStatus.BAD_REQUEST,
-                assertThrows(ResponseStatusException.class, () -> service.saveCard(noName)).getStatusCode());
+        noName.setBillingCycleDay(5);
+        noName.setGracePeriodDays(20);
+        assertEquals(HttpStatus.BAD_REQUEST, assertThrows(ResponseStatusException.class,
+                () -> service.saveCard(noName)).getStatusCode());
+
+        CreditCardRequest noCycle = new CreditCardRequest();
+        noCycle.setName("HDFC");
+        noCycle.setGracePeriodDays(20);
+        assertEquals(HttpStatus.BAD_REQUEST, assertThrows(ResponseStatusException.class,
+                () -> service.saveCard(noCycle)).getStatusCode());
+
+        CreditCardRequest noGrace = new CreditCardRequest();
+        noGrace.setName("HDFC");
+        noGrace.setBillingCycleDay(5);
+        assertEquals(HttpStatus.BAD_REQUEST, assertThrows(ResponseStatusException.class,
+                () -> service.saveCard(noGrace)).getStatusCode());
+
+        CreditCardRequest badGrace = new CreditCardRequest();
+        badGrace.setName("HDFC");
+        badGrace.setBillingCycleDay(5);
+        badGrace.setGracePeriodDays(61);
+        assertEquals(HttpStatus.BAD_REQUEST, assertThrows(ResponseStatusException.class,
+                () -> service.saveCard(badGrace)).getStatusCode());
 
         CreditCardRequest badDay = new CreditCardRequest();
         badDay.setName("HDFC");
         badDay.setBillingCycleDay(32);
-        assertEquals(HttpStatus.BAD_REQUEST,
-                assertThrows(ResponseStatusException.class, () -> service.saveCard(badDay)).getStatusCode());
+        badDay.setGracePeriodDays(20);
+        assertEquals(HttpStatus.BAD_REQUEST, assertThrows(ResponseStatusException.class,
+                () -> service.saveCard(badDay)).getStatusCode());
+    }
+
+    @Test
+    void aSavedCardKeepsItsGracePeriod() {
+        CreditCardRequest request = new CreditCardRequest();
+        request.setName("HDFC Millennia");
+        request.setBillingCycleDay(5);
+        request.setGracePeriodDays(25);
+        service.saveCard(request);
+
+        CreditCardView view = only(service.month("2026-11"));
+        assertEquals("HDFC Millennia", view.getName());
+        assertEquals(25, view.getGracePeriodDays());
     }
 
     @Test
     void aDuplicateCardNameIsRejected() {
-        card("HDFC Millennia", 5);
+        card("HDFC Millennia", 5, 20);
 
         CreditCardRequest duplicate = new CreditCardRequest();
         duplicate.setName("hdfc millennia");
         duplicate.setBillingCycleDay(5);
+        duplicate.setGracePeriodDays(20);
 
-        assertEquals(HttpStatus.BAD_REQUEST,
-                assertThrows(ResponseStatusException.class,
-                        () -> service.saveCard(duplicate)).getStatusCode());
-    }
-
-    @Test
-    void aCardOfAnotherClientIsNeverFound() {
-        CreditCard foreign = new CreditCard();
-        foreign.setId(42L);
-        Client other = new Client();
-        other.setId(99L);
-        foreign.setClient(other);
-        foreign.setName("Not mine");
-        foreign.setBillingCycleDay(5);
-
-        ResponseStatusException error = assertThrows(ResponseStatusException.class,
-                () -> service.saveBill(42L, bill("2026-11-05", 100)));
-        assertEquals(HttpStatus.NOT_FOUND, error.getStatusCode());
-        assertTrue(bills.isEmpty());
+        assertEquals(HttpStatus.BAD_REQUEST, assertThrows(ResponseStatusException.class,
+                () -> service.saveCard(duplicate)).getStatusCode());
     }
 
     @Test
     void aPurchaseMustBePositive() {
-        CreditCard card = card("HDFC Millennia", 5);
-        CreditCardPurchaseRequest request = new CreditCardPurchaseRequest();
-        request.setPurchaseDate("2026-11-01");
-        request.setAmount(0.0);
+        CreditCard card = card("HDFC Millennia", 5, 20);
 
-        assertEquals(HttpStatus.BAD_REQUEST,
-                assertThrows(ResponseStatusException.class,
-                        () -> service.addPurchase(card.getId(), request)).getStatusCode());
+        assertEquals(HttpStatus.BAD_REQUEST, assertThrows(ResponseStatusException.class,
+                () -> service.addPurchase(card.getId(),
+                        purchaseRequest("2026-11-01", 0.0))).getStatusCode());
     }
 
     @Test
     void monthParsingAcceptsBothShapes() {
         assertEquals(NOVEMBER, service.firstOfMonth("2026-11"));
         assertEquals(NOVEMBER, service.firstOfMonth("2026-11-23"));
-        assertEquals(LocalDate.of(2026, 11, 1), service.firstOfMonth((String) null));
+        assertEquals(NOVEMBER, service.firstOfMonth((String) null));
         assertEquals(Optional.empty(), Optional.ofNullable(service.dateOr("", null)));
+    }
+
+    private static List<CreditCardTransactionRequest> request(CreditCardTransactionRequest... rows) {
+        return new ArrayList<>(List.of(rows));
     }
 }

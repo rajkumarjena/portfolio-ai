@@ -379,14 +379,114 @@ tr.tone-grey   { background: var(--color-neutral-soft) !important; color: var(--
 
 .cc-card-actions { display: flex; gap: var(--space-1); }
 
-.cc-card-body {
-    display: grid;
-    grid-template-columns: 2fr 1fr;
-    gap: var(--space-4);
+/* MP_V5 #4: the two month totals, above the tabs. */
+.cc-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+}
+
+.cc-total {
+    flex: 1 1 220px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-neutral-soft);
+    border-left: 4px solid var(--color-primary);
+    border-radius: var(--radius);
+}
+
+.cc-total > span { font-size: var(--fs-small); color: var(--color-text-muted); }
+.cc-total-value { font-size: 1.15rem; }
+
+/* MP_V5 #2: the two tabs. */
+.cc-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    border-bottom: 2px solid var(--color-border);
+    margin-bottom: var(--space-3);
+}
+
+.cc-tab {
+    border: none;
+    background: transparent;
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--fs-small);
+    font-weight: 700;
+    color: var(--color-text-muted);
+    border-bottom: 3px solid transparent;
+    cursor: pointer;
+}
+
+.cc-tab:hover { color: var(--color-text); }
+
+.cc-tab.active {
+    color: var(--color-primary);
+    border-bottom-color: var(--color-primary);
+}
+
+.cc-tab-panel[hidden] { display: none; }
+
+/* MP_V5 #2: the Add Credit Card form. */
+.cc-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    align-items: flex-end;
+}
+
+.cc-form .field { margin-bottom: 0; flex: 1 1 200px; }
+.cc-form-actions { display: flex; gap: var(--space-2); }
+
+/* MP_V5 #3: each card's own month totals, transactions and action row. */
+.cc-month-totals {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    font-size: var(--fs-small);
+    color: var(--color-text-muted);
+    margin: var(--space-2) 0;
+}
+
+.cc-table-wrap {
+    overflow-x: auto;
+}
+
+.cc-bill-table { margin-bottom: var(--space-2); }
+.cc-bill-table th, .cc-bill-table td { white-space: nowrap; }
+.cc-bill-table .cc-bill-cell { text-align: center; }
+.cc-bill-radio {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    width: auto;
+    font-size: var(--fs-small);
+    white-space: nowrap;
+}
+.cc-bill-radio input { width: auto; }
+.cc-bill-radio.is-locked { opacity: 0.55; }
+.cc-remove-cell { text-align: center; }
+
+.cc-add-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
     margin-top: var(--space-2);
 }
 
-.cc-card-body .field { margin-bottom: var(--space-2); }
+.cc-add-row input[type="text"] { width: 180px; }
+.cc-add-row input[type="number"] { width: 120px; }
+
+@media (max-width: 700px) {
+    .cc-card-head { flex-direction: column; align-items: flex-start; }
+    .cc-form, .cc-add-row { flex-direction: column; align-items: stretch; }
+    .cc-form .field { flex: 1 1 auto; }
+    .cc-add-row input, .cc-add-row .btn { width: 100%; }
+}
 
 /* ---------------------------------------------------------- pagination ---- */
 .pagination { margin: var(--space-4) 0; text-align: center; }
@@ -903,6 +1003,18 @@ input.investment-type.sip {
     font-weight: 700;
     text-decoration: underline;
     white-space: nowrap;
+}
+
+/* MP_V5 #7: the note's first characters under the label - italic and a little
+   smaller than the row's own text, so it reads as a caption. */
+.misc-note-preview {
+    display: block;
+    font-style: italic;
+    font-size: 0.9em;
+    line-height: 1.25;
+    opacity: 0.75;
+    white-space: normal;
+    overflow-wrap: anywhere;
 }
 
 #notesBanner { white-space: pre-line; }

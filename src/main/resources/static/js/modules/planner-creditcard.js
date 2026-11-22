@@ -1,8 +1,10 @@
-// planner-creditcard.js - MPC_V1, the credit card popup of the Monthly Planner
-// Spending screen. Every card has a billing cycle; the bill of the cycle that
-// ends in the plan month is what the "Credit Card Bills" line plans. The server
-// owns the cycle arithmetic, the totals and the ownership - this module only
-// renders and submits (CONSISTENCY.md 3).
+// planner-creditcard.js - MPC_V1 / MP_V5, the Credit Card Bills Entry screen of
+// the Monthly Planner Spending page. A card is a name, a billing-cycle day and a
+// grace period; every transaction is billed in one month (cycle end + grace by
+// default, movable between this month and the next), and the Monthly Planner
+// plans the sum of the transactions billed in a month. The server owns the month
+// arithmetic, the totals and the ownership - this module only renders and
+// submits (CONSISTENCY.md 3).
 (function () {
   'use strict';
 
@@ -34,11 +36,17 @@
     }
   }
 
+  /** The plan month the planner page is showing - the view is loaded for it. */
   function monthValue() {
     const input = el('planMonth');
     if (input && input.value) return input.value;
     const now = new Date();
     return now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+  }
+
+  /** A server LocalDate ("2026-11-01") as "2026-11". */
+  function monthIso(value) {
+    return value ? String(value).slice(0, 7) : '';
   }
 
   function banner(message, ok) {
@@ -50,10 +58,23 @@
     box.classList.toggle('info', ok !== false);
   }
 
+  function activateTab(name) {
+    document.querySelectorAll('[data-cc-tab]').forEach(function (button) {
+      const active = button.getAttribute('data-cc-tab') === name;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    const transactions = el('ccTabTransactions');
+    const add = el('ccTabAdd');
+    if (transactions) transactions.hidden = name !== 'transactions';
+    if (add) add.hidden = name !== 'add';
+  }
+
   function openModal() {
     editing = null;
     renderForm();
     banner('');
+    activateTab('transactions');
     overlay.classList.add('open');
     load();
   }
@@ -74,77 +95,94 @@
 
   function render() {
     if (!view) return;
-    el('ccMonthLabel').textContent = view.monthLabel || '';
-    el('ccTotal').textContent = money(view.total);
+    el('ccCurrentMonthName').textContent = view.currentMonthLabel || 'this month';
+    el('ccNextMonthName').textContent = view.nextMonthLabel || 'next month';
+    el('ccCurrentTotal').textContent = money(view.currentBillTotal);
+    el('ccNextTotal').textContent = money(view.nextBillTotal);
+
     const wrap = el('ccCards');
     if (!view.cards || !view.cards.length) {
-      wrap.innerHTML = '<p class="muted">No credit cards yet - add the first one above.</p>';
+      wrap.innerHTML = '<p class="muted">No credit cards yet - open the '
+        + '<strong>Add Credit Card</strong> tab to add the first one.</p>';
       return;
     }
     wrap.innerHTML = view.cards.map(cardHtml).join('');
   }
 
-  /** How this cycle's figure was arrived at - the server says which. */
-  function sourceText(card) {
-    if (card.amountSource === 'BILL') {
-      return 'The bill you entered for this cycle is planned.';
-    }
-    if (card.amountSource === 'PURCHASES') {
-      return 'No bill entered yet - the purchases of this cycle are planned ('
-        + money(card.purchaseTotal) + ').';
-    }
-    return 'Nothing planned for this cycle yet.';
+  /** MP_V5 #3.iii: the two options carry the real month names. */
+  function billRadio(purchase, kind, label) {
+    const checked = kind === 'current' ? purchase.currentSelected : purchase.nextSelected;
+    const disabled = kind === 'next' && purchase.nextDisabled;
+    return '<label class="cc-bill-radio' + (disabled ? ' is-locked' : '') + '">'
+      + '<input type="radio" name="cc-bill-' + esc(purchase.id) + '" value="' + kind + '"'
+      + (checked ? ' checked' : '') + (disabled ? ' disabled' : '') + '>'
+      + ' Bill in ' + esc(label) + '</label>';
   }
 
   function cardHtml(card) {
-    const purchases = (card.purchases || []).map(p => `
-        <tr>
+    const currentLabel = view.currentMonthLabel || 'this month';
+    const nextLabel = view.nextMonthLabel || 'next month';
+    const purchases = (card.purchases || []).map(function (p) {
+      const remove = p.removable
+        ? '<button type="button" class="btn" data-cc-remove-purchase="' + esc(p.id) + '"'
+          + ' title="Remove this purchase">&times;</button>'
+        : '';
+      return `
+        <tr class="cc-bill-row" data-purchase="${esc(p.id)}"
+            data-bill-month="${esc(monthIso(p.billMonth))}">
           <td class="left">${esc(p.purchaseDate)}</td>
           <td class="left">${esc(p.description || '')}</td>
           <td class="amt">${money(p.amount)}</td>
-          <td><button type="button" class="btn" data-cc-remove-purchase="${esc(p.id)}"
-                title="Remove this purchase">&times;</button></td>
-        </tr>`).join('');
+          <td class="cc-bill-cell">${billRadio(p, 'current', currentLabel)}</td>
+          <td class="cc-bill-cell">${billRadio(p, 'next', nextLabel)}</td>
+          <td class="cc-remove-cell">${remove}</td>
+        </tr>`;
+    }).join('');
     return `
       <div class="cc-card" data-card="${esc(card.id)}">
         <div class="cc-card-head">
           <div>
             <strong>${esc(card.name)}</strong>
             <div class="muted">Billing cycle ends on the ${ordinal(card.billingCycleDay)} &middot;
-              ${esc(card.cycleLabel)}</div>
+              ${esc(card.cycleLabel)} &middot; grace period ${Number(card.gracePeriodDays) || 0} day(s)</div>
           </div>
           <div class="cc-card-actions">
             <button type="button" class="btn" data-cc-edit="${esc(card.id)}">Edit card</button>
             <button type="button" class="btn" data-cc-delete="${esc(card.id)}">Remove card</button>
           </div>
         </div>
-        <div class="cc-card-body">
-          <div>
-            <div class="muted">Purchases in this cycle (${Number(card.purchaseCount) || 0})</div>
-            <table class="data-table">
-              <thead>
-              <tr><th>Purchase date</th><th>Description</th><th>Amount (&#8377;)</th><th></th></tr>
-              </thead>
-              <tbody>${purchases
-        || '<tr><td colspan="4" class="muted left">No purchases entered for this cycle.</td></tr>'}</tbody>
-            </table>
-            <div class="nav-buttons" style="justify-content:flex-start;gap:8px;margin-top:8px;">
-              <input type="date" class="cc-pdate" aria-label="Purchase date">
-              <input type="text" class="cc-pdesc" maxlength="120" placeholder="Description" style="width:180px;">
-              <input type="number" class="cc-pamount" min="0" step="0.01" placeholder="Amount" style="width:120px;">
-              <button type="button" class="btn" data-cc-add-purchase="${esc(card.id)}">Add purchase</button>
-            </div>
-          </div>
-          <div>
-            <div class="field">
-              <label>Bill amount for this cycle (&#8377;)</label>
-              <input type="number" class="cc-bill" min="0" step="0.01"
-                     value="${Number(card.billAmount) || 0}">
-            </div>
-            <div class="muted" style="margin-bottom:8px;">${sourceText(card)}</div>
-            <button type="button" class="btn primary" data-cc-save-bill="${esc(card.id)}"
-                    data-cycle-end="${esc(card.cycleEnd)}">Save bill</button>
-          </div>
+
+        <!-- MP_V5 #3.vi: this card's own totals for the two months. -->
+        <div class="cc-month-totals">
+          <span>Bill amount for <strong>${esc(currentLabel)}</strong>:
+            <strong>${money(card.currentBillTotal)}</strong></span>
+          <span>Bill amount for <strong>${esc(nextLabel)}</strong>:
+            <strong>${money(card.nextBillTotal)}</strong></span>
+        </div>
+
+        <div class="cc-table-wrap">
+          <table class="data-table cc-bill-table">
+            <thead>
+            <tr>
+              <th>Purchase Date</th>
+              <th>Description</th>
+              <th>Amount (&#8377;)</th>
+              <th>Bill in ${esc(currentLabel)}</th>
+              <th>Bill in ${esc(nextLabel)}</th>
+              <th></th>
+            </tr>
+            </thead>
+            <tbody>${purchases
+        || '<tr><td colspan="6" class="muted left">No transactions billed in these months.</td></tr>'}</tbody>
+          </table>
+        </div>
+
+        <div class="cc-add-row">
+          <input type="date" class="cc-pdate" aria-label="Purchase date">
+          <input type="text" class="cc-pdesc" maxlength="120" placeholder="Description">
+          <input type="number" class="cc-pamount" min="0" step="0.01" placeholder="Amount">
+          <button type="button" class="btn" data-cc-add-purchase="${esc(card.id)}">Add Purchase</button>
+          <button type="button" class="btn primary" data-cc-save-bill="1">Save Bill</button>
         </div>
       </div>`;
   }
@@ -158,12 +196,15 @@
     }
     day.innerHTML = options;
     el('ccName').value = editing ? (editing.name || '') : '';
-    el('ccCardFormTitle').textContent = editing ? 'Edit ' + editing.name : 'Add a credit card';
-    el('ccSaveCard').textContent = editing ? 'Save card' : 'Add card';
+    el('ccGrace').value = editing ? String(Number(editing.gracePeriodDays) || 0) : '';
+    el('ccCardFormTitle').textContent = editing
+      ? 'Edit ' + editing.name
+      : 'Add a credit card';
+    el('ccSaveCard').textContent = editing ? 'Save Card' : 'Add Card';
     el('ccCancelCard').style.display = editing ? '' : 'none';
   }
 
-  /** Every answer is the refreshed month, so the popup and the planner agree. */
+  /** Every answer is the refreshed month, so the screen and the planner agree. */
   function apply(result) {
     if (!result) return;
     view = result;
@@ -177,14 +218,31 @@
 
   function saveCard() {
     const name = (el('ccName').value || '').trim();
+    const cycleDay = el('ccDay').value;
+    const graceRaw = String(el('ccGrace').value || '').trim();
+    // MP_V5 #2: all three fields are required.
     if (!name) {
       banner('Give the card a name.', false);
+      return;
+    }
+    if (!cycleDay) {
+      banner('Choose the billing cycle.', false);
+      return;
+    }
+    if (!graceRaw) {
+      banner('Enter the grace period in days.', false);
+      return;
+    }
+    const grace = Number(graceRaw);
+    if (!Number.isInteger(grace) || grace < 0) {
+      banner('The grace period must be a whole number of days (0 or more).', false);
       return;
     }
     const body = {
       id: editing ? editing.id : null,
       name: name,
-      billingCycleDay: Number(el('ccDay').value) || 1
+      billingCycleDay: Number(cycleDay),
+      gracePeriodDays: grace
     };
     const url = '/api/credit-cards' + (editing ? '/' + editing.id : '')
       + '?month=' + encodeURIComponent(monthValue());
@@ -193,7 +251,10 @@
     button.disabled = true;
     Api.guard(request, 'Could not save the card').then(function (result) {
       button.disabled = false;
+      if (!result) return;
       apply(result);
+      banner('Card saved.', true);
+      activateTab('transactions');
     });
   }
 
@@ -201,40 +262,50 @@
     if (!view) return;
     editing = (view.cards || []).find(card => String(card.id) === String(id)) || null;
     renderForm();
+    activateTab('add');
     if (editing) {
-      banner('Editing ' + editing.name + ' - change the billing-cycle day and save the card.', true);
+      banner('Editing ' + editing.name + ' - change its details and save the card.', true);
     }
   }
 
   function removeCard(id) {
     const card = ((view && view.cards) || []).find(item => String(item.id) === String(id));
     if (!card) return;
-    if (!window.confirm('Remove ' + card.name + ' with its bills and purchases?')) return;
+    if (!window.confirm('Remove ' + card.name + ' with its transactions?')) return;
     Api.guard(Api.del('/api/credit-cards/' + id + '?month=' + encodeURIComponent(monthValue())),
       'Could not remove the card').then(apply);
   }
 
-  function saveBill(id, button) {
-    // MP_V2: saving one bill saves every card's bill on the screen.
-    const cards = Array.from(document.querySelectorAll('.cc-card'));
+  /**
+   * MP_V5 #3.iv: every changed transaction of the whole screen is saved in one
+   * call - the button belongs to one card but the payload covers all of them.
+   */
+  function saveBill(button) {
+    const currentMonth = monthIso(view && view.currentMonth);
+    const nextMonth = monthIso(view && view.nextMonth);
+    const transactions = [];
+    document.querySelectorAll('#ccCards tr.cc-bill-row').forEach(function (row) {
+      const purchaseId = row.getAttribute('data-purchase');
+      const checked = row.querySelector('input[type="radio"]:checked');
+      if (!purchaseId || !checked) return;
+      const billMonth = checked.value === 'next' ? nextMonth : currentMonth;
+      if (!billMonth || billMonth === row.getAttribute('data-bill-month')) return;
+      transactions.push({ purchaseId: Number(purchaseId), billMonth: billMonth });
+    });
+    if (!transactions.length) {
+      banner('Every transaction already has its bill month - nothing to save.', true);
+      return;
+    }
     if (button) button.disabled = true;
-    const requests = cards.map(function (block) {
-      const saveBtn = block.querySelector('[data-cc-save-bill]');
-      const cardId = saveBtn ? saveBtn.getAttribute('data-cc-save-bill') : null;
-      if (!cardId) return Promise.resolve(null);
-      const amount = Number(block.querySelector('.cc-bill').value) || 0;
-      const cycleEnd = saveBtn.getAttribute('data-cycle-end');
-      return Api.put('/api/credit-cards/' + cardId + '/bills?month=' + encodeURIComponent(monthValue()),
-        { cycleEnd: cycleEnd, amount: amount });
-    });
-    Promise.all(requests).then(function (results) {
-      if (button) button.disabled = false;
-      const last = results.filter(Boolean).pop();
-      apply(last || view);
-    }).catch(function () {
-      if (button) button.disabled = false;
-      banner('Could not save the bills.', false);
-    });
+    Api.guard(Api.put('/api/credit-cards/transactions?month='
+      + encodeURIComponent(monthValue()), transactions),
+      'Could not save the bills')
+      .then(function (result) {
+        if (button) button.disabled = false;
+        if (!result) return;
+        apply(result);
+        banner('Saved ' + transactions.length + ' transaction(s).', true);
+      });
   }
 
   function addPurchase(id, button) {
@@ -251,12 +322,15 @@
       return;
     }
     button.disabled = true;
-    Api.guard(Api.post('/api/credit-cards/' + id + '/purchases?month=' + encodeURIComponent(monthValue()),
+    Api.guard(Api.post('/api/credit-cards/' + id + '/purchases?month='
+      + encodeURIComponent(monthValue()),
       { purchaseDate: purchaseDate, amount: amount, description: description }),
       'Could not add the purchase')
       .then(function (result) {
         button.disabled = false;
+        if (!result) return;
         apply(result);
+        banner('Purchase added - its bill month is set from the cycle and grace period.', true);
       });
   }
 
@@ -267,10 +341,15 @@
   }
 
   function onClick(event) {
+    const tab = event.target.closest('[data-cc-tab]');
+    if (tab) {
+      activateTab(tab.getAttribute('data-cc-tab'));
+      return;
+    }
     const button = event.target.closest('button');
     if (!button) return;
     const data = button.dataset;
-    if (data.ccSaveBill) return saveBill(data.ccSaveBill, button);
+    if (data.ccSaveBill) return saveBill(button);
     if (data.ccAddPurchase) return addPurchase(data.ccAddPurchase, button);
     if (data.ccRemovePurchase) return removePurchase(data.ccRemovePurchase);
     if (data.ccEdit) return editCard(data.ccEdit);
@@ -280,6 +359,7 @@
       editing = null;
       renderForm();
       banner('');
+      activateTab('transactions');
       return;
     }
     if (button.id === 'ccClose' || button.id === 'ccDone') return closeModal();
@@ -294,7 +374,7 @@
     const opener = el('ccOpen');
     if (opener) opener.addEventListener('click', openModal);
     overlay.addEventListener('click', onClick);
-    // The popup follows the planner's month - a cycle belongs to one month.
+    // The popup follows the planner's month - the planner figure is that month's.
     const month = el('planMonth');
     if (month) {
       month.addEventListener('change', function () {
