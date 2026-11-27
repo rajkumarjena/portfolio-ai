@@ -20,7 +20,7 @@ public final class CreditCardConstants {
     /** A card added without a chosen day ends its cycle on the first of the month. */
     public static final int DEFAULT_BILLING_DAY = 1;
 
-    /** MP_V5 #2: days after the cycle end before the amount is due. */
+    /** MP_V5 #2: days after the statement (the day after the cycle end) before the amount is due. */
     public static final int MIN_GRACE_DAYS = 0;
     public static final int MAX_GRACE_DAYS = 60;
     public static final int DEFAULT_GRACE_DAYS = 0;

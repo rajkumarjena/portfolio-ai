@@ -95,13 +95,23 @@
     <div class="modal-overlay" id="ccModal">
         <div class="modal wide">
             <button type="button" class="close-x" id="ccClose">&times;</button>
-            <h3>Credit Card Bills Entry</h3>
 
-            <!-- MP_V5 #4: both month totals, before the tabs. -->
+            <!-- MP_V6 #1/#4: the month picker sits on the title line and lets any
+                 month be shown, like the planner screens. -->
+            <div class="cc-head">
+                <h3>Credit Card Bills Entry</h3>
+                <div class="cc-month-nav">
+                    <button type="button" class="btn" id="ccPrevMonth" title="Previous month">&lsaquo;</button>
+                    <input type="month" id="ccMonth" title="Credit card bill month">
+                    <button type="button" class="btn" id="ccNextMonth" title="Next month">&rsaquo;</button>
+                </div>
+            </div>
+
+            <!-- MP_V5 #4 / MP_V6 #2: the selected month and the one after it. -->
             <div class="cc-summary">
                 <div class="cc-total">
-                    <span>Bill Amount for <strong id="ccCurrentMonthName">this month</strong></span>
-                    <strong class="cc-total-value" id="ccCurrentTotal">0</strong>
+                    <span>Bill Amount for <strong id="ccSelectedMonthName">this month</strong></span>
+                    <strong class="cc-total-value" id="ccSelectedTotal">0</strong>
                 </div>
                 <div class="cc-total">
                     <span>Bill Amount for <strong id="ccNextMonthName">next month</strong></span>

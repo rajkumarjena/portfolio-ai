@@ -379,6 +379,32 @@ tr.tone-grey   { background: var(--color-neutral-soft) !important; color: var(--
 
 .cc-card-actions { display: flex; gap: var(--space-1); }
 
+/* MP_V6 #4: the month picker on the title line of the screen. */
+.cc-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+}
+
+.cc-head h3 { margin: 0; }
+
+.cc-month-nav {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+}
+
+.cc-month-nav input[type="month"] { width: 165px; }
+
+/* MP_V6 #5: a past month's bills are only displayed, not offered as options. */
+.cc-bill-static {
+    font-size: var(--fs-small);
+    white-space: nowrap;
+}
+
 /* MP_V5 #4: the two month totals, above the tabs. */
 .cc-summary {
     display: flex;
@@ -482,10 +508,14 @@ tr.tone-grey   { background: var(--color-neutral-soft) !important; color: var(--
 .cc-add-row input[type="number"] { width: 120px; }
 
 @media (max-width: 700px) {
+    .cc-head { flex-direction: column; align-items: stretch; }
+    .cc-month-nav { width: 100%; }
+    .cc-month-nav input[type="month"] { flex: 1 1 auto; width: auto; }
     .cc-card-head { flex-direction: column; align-items: flex-start; }
     .cc-form, .cc-add-row { flex-direction: column; align-items: stretch; }
     .cc-form .field { flex: 1 1 auto; }
     .cc-add-row input, .cc-add-row .btn { width: 100%; }
+    .cc-total { flex: 1 1 100%; }
 }
 
 /* ---------------------------------------------------------- pagination ---- */

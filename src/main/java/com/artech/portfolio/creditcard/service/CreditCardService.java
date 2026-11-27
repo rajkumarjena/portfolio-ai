@@ -33,8 +33,14 @@ public interface CreditCardService {
     /** Remove a card with its transactions. */
     void deleteCard(Long cardId);
 
-    /** MP_V5 #3.iv: save every changed transaction's billed month in one call. */
-    void saveTransactions(List<CreditCardTransactionRequest> transactions);
+    /**
+     * MP_V5 #3.iv: save every changed transaction's billed month in one call.
+     *
+     * <p>MP_V6 #2: {@code month} is the selected month - only its own two months
+     * ({@code month} and the one after it) are accepted, and a past month is
+     * read only.</p>
+     */
+    void saveTransactions(String month, List<CreditCardTransactionRequest> transactions);
 
     CreditCardPurchaseView addPurchase(Long cardId, CreditCardPurchaseRequest request);
 

@@ -10,5 +10,11 @@ public interface CreditCardPurchaseRepository extends JpaRepository<CreditCardPu
     /** Every purchase of one card, oldest first (MP_V5 bills them by month). */
     List<CreditCardPurchase> findByCardIdOrderByPurchaseDateAsc(Long cardId);
 
+    /**
+     * MP_V6 #7: every purchase of the client's cards in one query, so the screen
+     * and the planner never issue a query per card.
+     */
+    List<CreditCardPurchase> findByCard_Client_IdOrderByPurchaseDateAsc(Long clientId);
+
     void deleteByCardId(Long cardId);
 }

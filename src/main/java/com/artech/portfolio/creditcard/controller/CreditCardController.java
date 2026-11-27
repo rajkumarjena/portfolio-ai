@@ -31,7 +31,11 @@ public class CreditCardController {
         this.creditCardService = creditCardService;
     }
 
-    /** Every card with the transactions billable in ?month=yyyy-MM. */
+    /**
+     * Every card with the transactions billable in ?month=yyyy-MM. MP_V6: a blank
+     * month opens on the screen's default month (the next one once every card's
+     * grace date of this month has passed).
+     */
     @GetMapping
     public CreditCardMonthView month(
             @RequestParam(value = "month", required = false) String month) {
@@ -72,7 +76,7 @@ public class CreditCardController {
     public CreditCardMonthView saveTransactions(
             @RequestBody List<CreditCardTransactionRequest> transactions,
             @RequestParam(value = "month", required = false) String month) {
-        creditCardService.saveTransactions(transactions);
+        creditCardService.saveTransactions(month, transactions);
         return creditCardService.month(month);
     }
 
