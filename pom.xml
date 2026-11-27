@@ -69,6 +69,16 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- CRED_V1: Argon2id key derivation for the Credential Vault. BouncyCastle
+             supplies Argon2BytesGenerator (the JDK has no Argon2 at all) and is
+             also what Spring Security's own Argon2 support builds on. AES-256-GCM
+             itself comes from the JDK. -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk18on</artifactId>
+            <version>1.78.1</version>
+        </dependency>
+
         <!-- Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
