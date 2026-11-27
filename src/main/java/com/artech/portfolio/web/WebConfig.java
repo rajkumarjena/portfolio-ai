@@ -44,6 +44,8 @@ public class WebConfig implements WebMvcConfigurer {
         registry.addViewController("/app-client-config.html").setViewName("app-client-config");
         registry.addViewController("/app-client-view.html").setViewName("app-client-view");
         registry.addViewController("/app-param-config.html").setViewName("app-param-config");
+        // CRED_V1: the Credential Vault, under the Application group.
+        registry.addViewController("/app-credential-vault.html").setViewName("app-credential-vault");
 
         registry.addViewController("/bonds/bond-form.html").setViewName("bonds/bond-form");
         registry.addViewController("/bonds/bond-view.html").setViewName("bonds/bond-view");
