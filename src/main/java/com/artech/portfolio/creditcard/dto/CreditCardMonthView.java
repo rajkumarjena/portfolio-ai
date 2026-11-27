@@ -9,29 +9,41 @@ import java.util.List;
 /**
  * MPC_V1 - every card of the client for one planner month.
  *
- * <p>MP_V5 #4: the screen also shows the system current and next month with the
- * sum of every transaction billed in them; {@code total} remains the planner
- * month's figure (requirement #5).</p>
+ * <p>MP_V6: the screen shows the selected month and the month after it, and the
+ * client may pick any month (past or future), so the pair is relative to the
+ * selection instead of the system clock. {@code defaultMonth} is the month the
+ * screen opens on - the next one once every card's grace date of the current
+ * month has passed - and {@code editable} says whether that pair's bill months
+ * may still be changed (a past month is read only).</p>
  */
 @Data
 public class CreditCardMonthView {
 
+    /** The month the figures below describe. */
     private LocalDate month;
     private String monthLabel;
 
-    /** MP_V5 #4: the system's current month and the month after it. */
-    private LocalDate currentMonth;
-    private String currentMonthLabel;
+    /** MP_V6 #2: the selected month - the first of the two displayed months. */
+    private LocalDate selectedMonth;
+    private String selectedMonthLabel;
+    /** MP_V6 #2: the month after the selected one. */
     private LocalDate nextMonth;
     private String nextMonthLabel;
 
+    /** MP_V6 #3: the month the screen opens on without a choice. */
+    private LocalDate defaultMonth;
+    private String defaultMonthLabel;
+
+    /** MP_V6: false for a past month - its bills are only displayed. */
+    private boolean editable;
+
     private List<CreditCardView> cards = new ArrayList<>();
 
-    /** The planner month's total - requirement #5. */
+    /** The selected month's total (the planner's figure for it). */
     private double total;
 
-    /** MP_V5 #4: every card's transactions billed in the current month. */
-    private double currentBillTotal;
-    /** MP_V5 #4: every card's transactions billed in the next month. */
+    /** MP_V6 #2: every card's transactions billed in the selected month. */
+    private double selectedBillTotal;
+    /** MP_V6 #2: every card's transactions billed in the month after it. */
     private double nextBillTotal;
 }

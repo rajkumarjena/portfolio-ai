@@ -25,8 +25,11 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * MPC_V1 / MP_V5 - credit cards, all rules server-side:
@@ -34,9 +37,10 @@ import java.util.Locale;
  *  #1  A card is a name, the day its billing cycle ends and a grace period; the
  *      cycle of a month runs from the day after the previous cycle ended to
  *      that day.
- *  #2  Every purchase is billed in one month: the month of its cycle end plus
- *      the card's grace period (MP_V5 #3.ii). The client may move it between the
- *      current and the next month.
+ *  #2  Every purchase is billed in one month: the month of the day the amount
+ *      is due, which is the card's grace period counted from the day after the
+ *      statement (the cycle end), so 16 December + 15 days is 1 January. The
+ *      client may move it between the two months on screen.
  *  #3  The Monthly Planner plans, for a month, the sum of every transaction
  *      billed in that month (MP_V5 #5/#6).
  *  #4  Ownership always comes from the session, never from the popup
@@ -71,54 +75,90 @@ public class CreditCardServiceImpl implements CreditCardService {
     @Transactional(readOnly = true)
     public CreditCardMonthView month(String rawMonth) {
         Client me = currentUserService.requireClient();
-        LocalDate month = firstOfMonth(rawMonth);
         LocalDate current = currentMonth();
-        LocalDate next = current.plusMonths(1);
+        List<CreditCard> cards = cardRepository.findByClientIdOrderByNameAsc(me.getId());
+        LocalDate defaultMonth = defaultMonth(cards, LocalDate.now(clock));
+        // MP_V6 #1/#2: any month may be shown - the pair is that month and the
+        // one after it. Without a choice the screen opens on the default month.
+        LocalDate selected = rawMonth == null || rawMonth.isBlank()
+                ? defaultMonth : firstOfMonth(rawMonth);
+        LocalDate next = selected.plusMonths(1);
+        Map<Long, List<CreditCardPurchase>> byCard = purchasesByCard(me.getId());
 
         CreditCardMonthView view = new CreditCardMonthView();
-        view.setMonth(month);
-        view.setMonthLabel(month.format(MONTH_LABEL));
-        view.setCurrentMonth(current);
-        view.setCurrentMonthLabel(current.format(MONTH_LABEL));
+        view.setMonth(selected);
+        view.setMonthLabel(selected.format(MONTH_LABEL));
+        view.setSelectedMonth(selected);
+        view.setSelectedMonthLabel(selected.format(MONTH_LABEL));
         view.setNextMonth(next);
         view.setNextMonthLabel(next.format(MONTH_LABEL));
+        view.setDefaultMonth(defaultMonth);
+        view.setDefaultMonthLabel(defaultMonth.format(MONTH_LABEL));
+        // MP_V6 #5: a past month is read only - its bills are only displayed.
+        view.setEditable(!selected.isBefore(current));
 
-        double total = 0;
-        double currentTotal = 0;
+        double selectedTotal = 0;
         double nextTotal = 0;
-        for (CreditCard card : cardRepository.findByClientIdOrderByNameAsc(me.getId())) {
-            CreditCardView cardView = viewOf(card, month, current, next);
+        for (CreditCard card : cards) {
+            CreditCardView cardView = viewOf(card, selected, current,
+                    byCard.getOrDefault(card.getId(), List.of()));
             view.getCards().add(cardView);
-            total += cardView.getAmount();
-            currentTotal += cardView.getCurrentBillTotal();
+            selectedTotal += cardView.getSelectedBillTotal();
             nextTotal += cardView.getNextBillTotal();
         }
-        view.setTotal(round(total));
-        view.setCurrentBillTotal(round(currentTotal));
+        view.setTotal(round(selectedTotal));
+        view.setSelectedBillTotal(round(selectedTotal));
         view.setNextBillTotal(round(nextTotal));
         return view;
+    }
+
+    /**
+     * MP_V6 #3: the month the screen opens on - the current one while at least one
+     * card is still inside its cycle of that month, because a purchase made today
+     * can still be entered against it. Once every card's cycle of this month has
+     * ended (November's bill entry is closed, so its amount is due at the latest
+     * one grace period later), the screen moves exactly one month on - December,
+     * never further, even when a long grace period bills the purchase in January.
+     */
+    private LocalDate defaultMonth(List<CreditCard> cards, LocalDate today) {
+        LocalDate current = today.withDayOfMonth(1);
+        LocalDate latestCycleEnd = null;
+        for (CreditCard card : cards) {
+            LocalDate cycleEnd = CreditCardCycle.endOf(card.getBillingCycleDay(), current);
+            if (latestCycleEnd == null || cycleEnd.isAfter(latestCycleEnd)) {
+                latestCycleEnd = cycleEnd;
+            }
+        }
+        return latestCycleEnd != null && today.isAfter(latestCycleEnd)
+                ? current.plusMonths(1) : current;
     }
 
     @Override
     @Transactional(readOnly = true)
     public double monthTotal(Long clientId, LocalDate month) {
         LocalDate monthStart = month == null ? currentMonth() : month.withDayOfMonth(1);
-        double total = 0;
+        Map<Long, CreditCard> byId = new HashMap<>();
         for (CreditCard card : cardRepository.findByClientIdOrderByNameAsc(clientId)) {
-            for (CreditCardPurchase purchase : purchasesOf(card)) {
-                if (monthStart.equals(effectiveBillMonth(card, purchase))) {
-                    total += purchase.getAmount();
-                }
+            byId.put(card.getId(), card);
+        }
+        double total = 0;
+        for (CreditCardPurchase purchase : purchaseRepository
+                .findByCard_Client_IdOrderByPurchaseDateAsc(clientId)) {
+            CreditCard card = purchase.getCard() == null
+                    ? null : byId.get(purchase.getCard().getId());
+            if (card != null && monthStart.equals(effectiveBillMonth(card, purchase))) {
+                total += purchase.getAmount();
             }
         }
         return round(total);
     }
 
-    /** One card's side of the popup and what it plans in the planner month. */
-    private CreditCardView viewOf(CreditCard card, LocalDate month,
-                                  LocalDate current, LocalDate next) {
-        LocalDate cycleEnd = CreditCardCycle.endOf(card.getBillingCycleDay(), month);
+    /** One card's side of the popup and what it plans in the selected month. */
+    private CreditCardView viewOf(CreditCard card, LocalDate selected, LocalDate current,
+                                  List<CreditCardPurchase> purchases) {
+        LocalDate cycleEnd = CreditCardCycle.endOf(card.getBillingCycleDay(), selected);
         LocalDate cycleStart = CreditCardCycle.startOf(card.getBillingCycleDay(), cycleEnd);
+        LocalDate next = selected.plusMonths(1);
 
         CreditCardView view = new CreditCardView();
         view.setId(card.getId());
@@ -130,57 +170,66 @@ public class CreditCardServiceImpl implements CreditCardService {
         view.setCycleEnd(cycleEnd);
         view.setCycleLabel(cycleStart.format(DATE_LABEL) + " - " + cycleEnd.format(DATE_LABEL));
 
-        // MP_V5 #3: the screen lists the transactions that can be billed in the
-        // current or the next month, plus the previous month's (still removable).
-        LocalDate oldestListed = current.minusMonths(
-                CreditCardConstants.MONTHS_BEFORE_CURRENT_REMOVABLE);
+        // MP_V5 #3: the screen lists the transactions of the selected month, the
+        // next one and - while the current month is shown - the previous month's
+        // (still removable) rows.
+        LocalDate oldestListed = selected.equals(current)
+                ? current.minusMonths(CreditCardConstants.MONTHS_BEFORE_CURRENT_REMOVABLE)
+                : selected;
 
-        double planTotal = 0;
-        double currentTotal = 0;
+        double selectedTotal = 0;
         double nextTotal = 0;
-        for (CreditCardPurchase purchase : purchasesOf(card)) {
+        for (CreditCardPurchase purchase : purchases) {
             LocalDate billMonth = effectiveBillMonth(card, purchase);
-            if (month.equals(billMonth)) {
-                planTotal += purchase.getAmount();
-            }
-            if (current.equals(billMonth)) {
-                currentTotal += purchase.getAmount();
+            if (selected.equals(billMonth)) {
+                selectedTotal += purchase.getAmount();
             }
             if (next.equals(billMonth)) {
                 nextTotal += purchase.getAmount();
             }
             if (!billMonth.isBefore(oldestListed) && !billMonth.isAfter(next)) {
-                view.getPurchases().add(purchaseView(card, purchase, billMonth, current, next));
+                view.getPurchases().add(purchaseView(card, purchase, billMonth, selected, current));
             }
         }
         view.setPurchaseCount(view.getPurchases().size());
-        view.setAmount(round(planTotal));
-        view.setCurrentBillTotal(round(currentTotal));
+        view.setAmount(round(selectedTotal));
+        view.setSelectedBillTotal(round(selectedTotal));
         view.setNextBillTotal(round(nextTotal));
         return view;
     }
 
     private CreditCardPurchaseView purchaseView(CreditCard card, CreditCardPurchase purchase,
-                                                LocalDate billMonth, LocalDate current,
-                                                LocalDate next) {
+                                                LocalDate billMonth, LocalDate selected,
+                                                LocalDate current) {
         CreditCardPurchaseView view = new CreditCardPurchaseView();
         view.setId(purchase.getId());
         view.setPurchaseDate(purchase.getPurchaseDate());
         view.setDescription(purchase.getDescription());
         view.setAmount(round(purchase.getAmount()));
         view.setBillMonth(billMonth);
-        view.setCurrentSelected(current.equals(billMonth));
-        view.setNextSelected(next.equals(billMonth));
-        // MP_V5 #3.ii: only a cycle end (plus grace) that lands in the next
-        // month may be pushed there; otherwise the current month is fixed.
-        view.setNextDisabled(!derivedBillMonth(card, purchase).isAfter(current));
+        view.setInSelectedMonth(selected.equals(billMonth));
+        view.setInNextMonth(selected.plusMonths(1).equals(billMonth));
+        // MP_V5 #3.ii: only a cycle end (plus grace) that lands after the shown
+        // month may be pushed to the next one; otherwise it is fixed there.
+        view.setNextDisabled(!derivedBillMonth(card, purchase).isAfter(selected));
+        // MP_V5 #3.vii: removal stays anchored to the system's current month.
         view.setRemovable(!billMonth.isBefore(current.minusMonths(
                 CreditCardConstants.MONTHS_BEFORE_CURRENT_REMOVABLE)));
         return view;
     }
 
-    private List<CreditCardPurchase> purchasesOf(CreditCard card) {
-        return purchaseRepository.findByCardIdOrderByPurchaseDateAsc(card.getId());
+    /** MP_V6 #7: all of the client's purchases in one query, grouped by card. */
+    private Map<Long, List<CreditCardPurchase>> purchasesByCard(Long clientId) {
+        Map<Long, List<CreditCardPurchase>> grouped = new HashMap<>();
+        for (CreditCardPurchase purchase : purchaseRepository
+                .findByCard_Client_IdOrderByPurchaseDateAsc(clientId)) {
+            if (purchase.getCard() == null || purchase.getCard().getId() == null) {
+                continue;
+            }
+            grouped.computeIfAbsent(purchase.getCard().getId(), id -> new ArrayList<>())
+                    .add(purchase);
+        }
+        return grouped;
     }
 
     // ------------------------------------------------------------ bill months
@@ -193,11 +242,24 @@ public class CreditCardServiceImpl implements CreditCardService {
 
     /** MP_V5 #3.ii: month of the cycle end plus the card's grace period. */
     private LocalDate derivedBillMonth(CreditCard card, CreditCardPurchase purchase) {
-        LocalDate date = purchase.getPurchaseDate() == null
-                ? LocalDate.now(clock) : purchase.getPurchaseDate();
+        return billMonthOf(card, purchase.getPurchaseDate());
+    }
+
+    /**
+     * The month a purchase made on {@code date} is billed in: its cycle ends on
+     * the card's billing day, the amount is due after the grace period and the
+     * bill belongs to the month of that due date.
+     *
+     * <p>The grace period runs from the day after the statement, not from the
+     * cycle end itself: a cycle ending 16 December with 15 grace days is due on
+     * 1 January, so the purchase is billed in January - not in December, which is
+     * only the statement's month.</p>
+     */
+    private LocalDate billMonthOf(CreditCard card, LocalDate date) {
+        LocalDate purchaseDate = date == null ? LocalDate.now(clock) : date;
+        LocalDate cycleEnd = CreditCardCycle.endOfPurchase(card.getBillingCycleDay(), purchaseDate);
         int grace = Math.max(CreditCardConstants.MIN_GRACE_DAYS, graceOf(card));
-        return CreditCardCycle.endOfPurchase(card.getBillingCycleDay(), date)
-                .plusDays(grace).withDayOfMonth(1);
+        return cycleEnd.plusDays(1 + grace).withDayOfMonth(1);
     }
 
     // ---------------------------------------------------------------- writing
@@ -271,13 +333,19 @@ public class CreditCardServiceImpl implements CreditCardService {
      */
     @Override
     @Transactional
-    public void saveTransactions(List<CreditCardTransactionRequest> transactions) {
+    public void saveTransactions(String rawMonth, List<CreditCardTransactionRequest> transactions) {
         Client me = currentUserService.requireClient();
         if (transactions == null) {
             return;
         }
         LocalDate current = currentMonth();
-        LocalDate next = current.plusMonths(1);
+        // MP_V6 #2: the two months of the selected pair, never a past month.
+        LocalDate selected = firstOfMonth(rawMonth);
+        if (selected.isBefore(current)) {
+            throw bad("The bills of " + selected.format(MONTH_LABEL)
+                    + " can no longer be changed");
+        }
+        LocalDate next = selected.plusMonths(1);
         for (CreditCardTransactionRequest item : transactions) {
             if (item == null || item.getPurchaseId() == null) {
                 continue;
@@ -291,9 +359,9 @@ public class CreditCardServiceImpl implements CreditCardService {
                         "The purchase was not found");
             }
             LocalDate month = monthOrNull(item.getBillMonth());
-            if (month == null || (!month.equals(current) && !month.equals(next))) {
+            if (month == null || (!month.equals(selected) && !month.equals(next))) {
                 throw bad("A transaction can be billed only in "
-                        + current.format(MONTH_LABEL) + " or " + next.format(MONTH_LABEL));
+                        + selected.format(MONTH_LABEL) + " or " + next.format(MONTH_LABEL));
             }
             purchase.setBillMonth(month);
             purchaseRepository.save(purchase);
@@ -322,7 +390,7 @@ public class CreditCardServiceImpl implements CreditCardService {
         purchase.setBillMonth(derivedBillMonth(card, purchase));
         CreditCardPurchase saved = purchaseRepository.save(purchase);
         return purchaseView(card, saved, effectiveBillMonth(card, saved),
-                currentMonth(), currentMonth().plusMonths(1));
+                currentMonth(), currentMonth());
     }
 
     @Override

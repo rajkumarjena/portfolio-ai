@@ -10,7 +10,7 @@ import java.util.List;
  * MPC_V1 - one card and its billing cycle of the planner month.
  *
  * <p>MP_V5 #3: the purchases carry the two month options, and the card sums its
- * own transactions for the current and the next month. {@code amount} stays what
+ * own transactions for the selected and the next month. {@code amount} stays what
  * the Monthly Planner plans for its month (every transaction billed in it).</p>
  */
 @Data
@@ -28,15 +28,15 @@ public class CreditCardView {
     /** "6 Oct 2026 - 5 Nov 2026", ready to render. */
     private String cycleLabel;
 
-    /** MP_V5 #3: the transactions billable in the current or the next month. */
+    /** MP_V5 #3: the transactions billable in the selected or the next month. */
     private List<CreditCardPurchaseView> purchases = new ArrayList<>();
     private int purchaseCount;
 
-    /** MP_V5 #3.vi: this card's total billed in the current month. */
-    private double currentBillTotal;
-    /** MP_V5 #3.vi: this card's total billed in the next month. */
+    /** MP_V6 #2: this card's total billed in the selected month. */
+    private double selectedBillTotal;
+    /** MP_V6 #2: this card's total billed in the month after it. */
     private double nextBillTotal;
 
-    /** What this card plans in the planner month - transactions billed in it. */
+    /** What this card plans in the selected month - transactions billed in it. */
     private double amount;
 }
